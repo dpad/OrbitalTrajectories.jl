@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test_and_docs:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        julia_version:
+          - '1'
+        os:
+          - ubuntu-latest
+          # - windows-latest
+        arch:
+          - x64
+
+    steps:
+      
+      # Setup environment
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@latest
+        with:
+          version: ${{ matrix.julia_version }}
+
+      - uses: actions/cache@v2
+        env:
+          cache-name: cache-artifacts
+        with:
+          path: |
+            ~/.julia/artifacts
+          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('Artifacts.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-${{ env.cache-name }}-
+
+      - uses: actions/cache@v2
+        env:
+          cache-name: cache-packages
+        with:
+          path: |
+            ~/.julia/packages
+            ~/.julia/compiled
+          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('Project.toml', 'test/Project.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-${{ env.cache-name }}-
+
+      # Julia Dependencies
+      - name: Install Julia dependencies
+        uses: julia-actions/julia-buildpkg@latest
+        
+      # Run tests
+      - name: Run tests
+        run:  julia --project -e 'using Pkg; Pkg.test(coverage=true);'
+
+      - name: Codecov
+        uses: julia-actions/julia-uploadcodecov@latest
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Install documentation dependencies
+        run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+
+      - name: Build and deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For authentication with GitHub Actions token
+          GITHUB_REPOSITORY: ${{ env.GITHUB_REPOSITORY }}
+        run: julia --project=docs/ docs/make.jl
