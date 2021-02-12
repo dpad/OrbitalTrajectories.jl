@@ -1,0 +1,4 @@
+using Documenter
+using OrbitalTrajectories
+
+doctest(OrbitalTrajectories)
