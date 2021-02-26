@@ -4,7 +4,7 @@ module SpiceUtils
     using Dates
     using SPICE
     using ModelingToolkit
-    using Pkg.MiniProgressBars
+    using ProgressMeter
     using Pkg.Artifacts
     using ForwardDiff
     using StaticArrays
@@ -58,27 +58,20 @@ module SpiceUtils
         
         # Check if the kernel has already been downloaded before, and if not, download it.
         meta_hash = Base.SHA1(meta["git-tree-sha1"])
-        kernel_path = artifact_path(meta_hash)
-        if !artifact_exists(meta_hash)
-
-            # Progress bar based on Pkg.PlatformEngines code (MIT "Expact" License, Copyright (c) 2017: Stefan Karpinski.)
+        download_url = meta["download"][1]["url"]
+        kernel_dir = artifact_path(meta_hash)
+        kernel_path = joinpath(kernel_dir, basename(download_url))
+        if !artifact_exists(meta_hash) || !isfile(kernel_path)
             progress = begin
-                bar = MiniProgressBar(header="Downloading $(titlecase(system_name)) ephemerides (including $(titlecase(body_name)))", color=Base.info_color())
-                io = stdout
-                start_progress(io, bar)
-                (total, now) -> begin
-                    bar.max = total
-                    bar.current = now
-                    show_progress(io, bar)
-                end
+                max_n = 10000
+                bar = Progress(max_n; desc="Downloading $(titlecase(system_name)) ephemerides (including $(titlecase(body_name)))", color=Base.info_color())
+                (total, now) -> update!(bar, total > 0 ? round(Int, (now / total) * max_n) : 0)
             end
-
             try
-                download_url = meta["download"][1]["url"]
-                mkdir(kernel_path)
-                Downloads.download(meta["download"][1]["url"], joinpath(kernel_path, basename(download_url)); progress)
+                mkpath(kernel_dir)
+                Downloads.download(download_url, kernel_path; progress)
             finally
-                end_progress(io, bar)
+                finish!(bar)
             end
         end
 
