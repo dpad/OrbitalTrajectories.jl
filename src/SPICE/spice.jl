@@ -8,19 +8,26 @@ module SpiceUtils
     using Pkg.Artifacts
     using ForwardDiff
     using StaticArrays
+    using Memoize
 
     export mass_fraction
     export state_to_synodic, state_from_synodic
     export pos_to_synodic, pos_from_synodic
 
     function __init__()
-        # Load a set of default SPICE kernels for this project
+        # Load a set of default SPICE kernels for all the main planetary bodies.
         furnsh(readdir(artifact"spice_kernels", join=true)...)
         nothing
     end
 
     const artifacts_toml = find_artifacts_toml(@__DIR__)
-    function load_ephemerides(body_name)
+    @memoize function load_ephemerides(body_name)
+        # XXX: This is a bit of a hacky workaround of the existing Pkg.Artifacts system,
+        # which supports lazy artifact loading but assumes the files it downloads are
+        # gzipped. However, our kernels are just files straight from the NAIF site, so
+        # we instead load them lazily here. This means that artifact"(body)_ephemerides"
+        # will not work.
+
         # Do we need to load any ephemerides for this body?
         body_name = lowercase(String(body_name))
         body_ID   = bodn2c(body_name)
@@ -32,15 +39,20 @@ module SpiceUtils
         end
 
         # Otherwise, let's load the planetary system
-        system_ID = (body_ID ÷ 100) + 99
-        system_name = bodc2n(system_ID)
+        system_ID = ((body_ID ÷ 100) * 100) + 99
+        system_name = lowercase(bodc2n(system_ID))
         artifact_name = "$(system_name)_ephemerides"
 
         # Check if we've defined a default kernel for this planetary system.
         meta = artifact_meta(artifact_name, artifacts_toml)
         if isnothing(meta)
-            @warn """No default SPICE kernels specified for the $(titlecase(system_name)) system.
-            You may need to download and then load them manually with `SPICE.furnsh`."""
+            # No default kernels specified for this system. Either the body already exists in
+            # the `spice_kernels` default (e.g. the Moon), or we just didn't specify it in 
+            # build.jl / Artifacts.toml.
+            # We don't necessarily want to warn the user (e.g. the Moon) because SPICE will
+            # error out anyway if it doesn't have sufficient data to propagate the body.
+            # @warn """No default SPICE kernels specified for the $(titlecase(system_name)) system.
+            # You may need to download and then load them manually with `SPICE.furnsh`."""
             return false
         end
         
@@ -51,7 +63,7 @@ module SpiceUtils
 
             # Progress bar based on Pkg.PlatformEngines code (MIT "Expact" License, Copyright (c) 2017: Stefan Karpinski.)
             progress = begin
-                bar = MiniProgressBar(header="Downloading $(system_name) system ephemerides", color=Base.info_color())
+                bar = MiniProgressBar(header="Downloading $(titlecase(system_name)) ephemerides (including $(titlecase(body_name)))", color=Base.info_color())
                 io = stdout
                 start_progress(io, bar)
                 (total, now) -> begin
