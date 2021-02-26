@@ -17,6 +17,33 @@ Pkg.add("OrbitalTrajectories")```).
 
 To later update to the newest release, simply do ```update OrbitalTrajectories```.
 
+## Features
+
+- High-performance and highly accurate trajectory propagation in several astrodynamical models:
+  - Composable models built directly from symbolic mathematical equations of motion
+  - Compiled performance equivalent or exceeding that of MATLAB/Fortran competitors
+  - High-order interpolation of resulting trajectories
+  - Dynamic conversions between inertial and rotating reference frames
+- Implemented astrodynamical models:
+  - **Circular Restricted 3-Body Problem** (`ER3BP`)
+  - **Elliptic Restricted 3-Body Problem** (`ER3BP`)
+  - **Bi-Circular Restricted 4-Body Problem** (`BC4BP`)
+  - **Restricted N-Body Problem** (`EphemerisNBP`)
+    - Body states computed from NASA NAIF (SPICE) ephemerides downloaded automatically as needed
+    - Automatic SPICE dynamic reference frames built for conversions
+- Computation of State Transition Matrices (STMs):
+  - Using fast, accurate Automatic Differentiation (AD) for every model
+  - Using symbolically computed Variational Equations (VE) for some models
+  - Hand-tuned variational equations for CR3BP model
+- Generic single-shooting differential corrector, supporting:
+  - Finding axisymmetric (quasi-)periodic orbits in every model
+- Simple parameter continuation for computing families of orbits
+- Plotting recipes
+  - Plot trajectories in inertial/rotating frames
+  - Show primary body, secondary body, and libration points
+  - Plot orbit families with custom-valued colourbars
+- Support for Julia's highly-composable state-of-the-art ecosystem for machine learning, statistical analysis, and more
+
 ## License & References
 Distributed under the [Apache License 2.0](LICENSE)
 
