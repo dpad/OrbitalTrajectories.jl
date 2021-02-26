@@ -74,7 +74,9 @@ module SpiceUtils
             end
 
             try
-                Downloads.download(meta["download"][1]["url"], kernel_path; progress)
+                download_url = meta["download"][1]["url"]
+                mkdir(kernel_path)
+                Downloads.download(meta["download"][1]["url"], joinpath(kernel_path, basename(download_url)); progress)
             finally
                 end_progress(io, bar)
             end
