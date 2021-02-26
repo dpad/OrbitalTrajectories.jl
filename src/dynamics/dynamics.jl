@@ -42,6 +42,13 @@ module Dynamics
     # Differential correctors
     abstract type Abstract_DifferentialCorrector end
 
+    #--------#
+    # TRAITS #
+    #--------#
+    @traitdef HasJacobian{X}
+    @traitimpl HasJacobian{X} <- has_jacobian(X)
+    has_jacobian(X::Type{<:DiffEqBase.ODEFunction}) = !isnothing(X.parameters[6])  # TJ (Jacobian) parameter
+
     #----------#
     # INCLUDES #
     #----------#
