@@ -86,6 +86,10 @@ function EphemerisNBP(bodies::Vararg{Symbol}; center=nothing, kwargs...)
     all_bodies = isnothing(center) ? (bodies[1], bodies...) : (center, bodies...)
     bodies_symbols = @. Symbol(lowercase(String(all_bodies)))
     props = NBPSystemProperties(bodies_symbols...)
+
+    # Load ephemerides for all bodies...
+    map(SpiceUtils.load_ephemerides, all_bodies)
+
     EphemerisNBP(_NBP_ODEFunctions(props; kwargs...), props)
 end
 
