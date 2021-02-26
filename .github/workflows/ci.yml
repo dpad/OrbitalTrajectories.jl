@@ -94,27 +94,6 @@ jobs:
         with:
           version: ${{ matrix.julia_version }}
 
-      - uses: actions/cache@v2
-        env:
-          cache-name: cache-artifacts
-        with:
-          path: |
-            ~/.julia/artifacts
-          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('Artifacts.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-test-${{ env.cache-name }}-
-
-      - uses: actions/cache@v2
-        env:
-          cache-name: cache-packages
-        with:
-          path: |
-            ~/.julia/packages
-            ~/.julia/compiled
-          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('Project.toml', 'test/Project.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-test-${{ env.cache-name }}-
-
       - name: Install documentation dependencies
         run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
 
