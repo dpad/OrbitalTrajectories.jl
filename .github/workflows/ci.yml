@@ -95,7 +95,7 @@ jobs:
           version: ${{ matrix.julia_version }}
 
       - name: Install documentation dependencies
-        run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+        run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.build(verbose=true); Pkg.instantiate()'
 
       - name: Build and deploy
         env:
