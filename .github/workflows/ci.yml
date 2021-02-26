@@ -13,7 +13,7 @@ defaults:
     shell: bash
 
 jobs:
-  test_and_docs:
+  test:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
 
     runs-on: ${{ matrix.os }}
@@ -69,6 +69,50 @@ jobs:
         uses: julia-actions/julia-uploadcodecov@latest
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  docs:
+    needs: test
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        julia_version:
+          - '1'
+        os:
+          - ubuntu-latest
+          # - windows-latest
+        arch:
+          - x64
+
+    steps:
+      
+      # Setup environment
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@latest
+        with:
+          version: ${{ matrix.julia_version }}
+
+      - uses: actions/cache@v2
+        env:
+          cache-name: cache-artifacts
+        with:
+          path: |
+            ~/.julia/artifacts
+          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('Artifacts.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-${{ env.cache-name }}-
+
+      - uses: actions/cache@v2
+        env:
+          cache-name: cache-packages
+        with:
+          path: |
+            ~/.julia/packages
+            ~/.julia/compiled
+          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('Project.toml', 'test/Project.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-test-${{ env.cache-name }}-
 
       - name: Install documentation dependencies
         run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
