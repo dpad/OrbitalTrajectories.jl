@@ -1,8 +1,10 @@
 module SpiceUtils
 
+    using Downloads
     using Dates
     using SPICE
     using ModelingToolkit
+    using Pkg.MiniProgressBars
     using Pkg.Artifacts
     using ForwardDiff
     using StaticArrays
@@ -13,9 +15,62 @@ module SpiceUtils
 
     function __init__()
         # Load a set of default SPICE kernels for this project
-        @info "Reading kernels $(readdir(artifact"spice_kernels"))"
         furnsh(readdir(artifact"spice_kernels", join=true)...)
         nothing
+    end
+
+    const artifacts_toml = find_artifacts_toml(@__DIR__)
+    function load_ephemerides(body_name)
+        # Do we need to load any ephemerides for this body?
+        body_name = lowercase(String(body_name))
+        body_ID   = bodn2c(body_name)
+        body_idx_in_system = body_ID % 100
+
+        if body_idx_in_system == 0 || body_idx_in_system == 99
+            # This is the primary (planetary) body, so is already included in the default kernels.
+            return true
+        end
+
+        # Otherwise, let's load the planetary system
+        system_ID = (body_ID ÷ 100) + 99
+        system_name = bodc2n(system_ID)
+        artifact_name = "$(system_name)_ephemerides"
+
+        # Check if we've defined a default kernel for this planetary system.
+        meta = artifact_meta(artifact_name, artifacts_toml)
+        if isnothing(meta)
+            @warn """No default SPICE kernels specified for the $(titlecase(system_name)) system.
+            You may need to download and then load them manually with `SPICE.furnsh`."""
+            return false
+        end
+        
+        # Check if the kernel has already been downloaded before, and if not, download it.
+        meta_hash = Base.SHA1(meta["git-tree-sha1"])
+        kernel_path = artifact_path(meta_hash)
+        if !artifact_exists(meta_hash)
+
+            # Progress bar based on Pkg.PlatformEngines code (MIT "Expact" License, Copyright (c) 2017: Stefan Karpinski.)
+            progress = begin
+                bar = MiniProgressBar(header="Downloading $(system_name) system ephemerides", color=Base.info_color())
+                io = stdout
+                start_progress(io, bar)
+                (total, now) -> begin
+                    bar.max = total
+                    bar.current = now
+                    show_progress(io, bar)
+                end
+            end
+
+            try
+                Downloads.download(meta["download"][1]["url"], kernel_path; progress)
+            finally
+                end_progress(io, bar)
+            end
+        end
+
+        # Load the planetary system kernel.
+        furnsh(kernel_path)
+        return true
     end
 
     @doc "Get a target body position from SPICE kernels."
