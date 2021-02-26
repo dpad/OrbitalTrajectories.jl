@@ -63,12 +63,13 @@ jobs:
         
       # Run tests
       - name: Run tests
-        run:  julia --project -e 'using Pkg; Pkg.test(coverage=true);'
+        uses: julia-actions/julia-runtest@latest
 
-      - name: Codecov
-        uses: julia-actions/julia-uploadcodecov@latest
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      # Code coverage tests
+      - uses: julia-actions/julia-processcoverage@latest
+      - uses: codecov/codecov-action@latest
+        with:
+          file: lcov.info
 
   docs:
     needs: test
