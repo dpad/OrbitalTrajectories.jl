@@ -1,7 +1,7 @@
 name = "OrbitalTrajectories"
 uuid = "2b613a20-8d2a-5290-b19f-e06f4bcc2e7d"
 authors = ["Dan Padilha"]
-version = "0.3.0"
+version = "0.1.0"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
