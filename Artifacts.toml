@@ -1,2 +1,18 @@
+[jupiter_ephemerides]
+git-tree-sha1 = "35d6394cadd54f1455d550bb7d7f185b36dc9bc9"
+lazy = true
+
+    [[jupiter_ephemerides.download]]
+    sha256 = ""
+    url = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/jup310.bsp"
+
+[mars_ephemerides]
+git-tree-sha1 = "70929421f96b5a78a97b2ee8b998aa56363a80c7"
+lazy = true
+
+    [[mars_ephemerides.download]]
+    sha256 = ""
+    url = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/mar097.bsp"
+
 [spice_kernels]
 git-tree-sha1 = "fea600af0a348dae8ae7b237de06fd6e980a3e2f"
