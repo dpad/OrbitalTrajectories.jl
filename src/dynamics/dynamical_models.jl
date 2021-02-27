@@ -25,6 +25,10 @@ end
 @doc """Generic model function."""
 (model::Abstract_DynamicalModel)(args...; kwargs...) = model.ode.ode_f(args...; kwargs...)
 
+@traitdef HasJacobian{X}
+@traitimpl HasJacobian{X} <- has_jacobian(X)
+has_jacobian(X::Type{<:DiffEqBase.ODEFunction}) = !isnothing(fieldtype(X, :jac))
+
 @doc """
     Function to generate an ODE Function that computes the State Transition
     Matrix simultaneously with the given function f. This requires f to have
