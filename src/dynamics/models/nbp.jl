@@ -13,12 +13,11 @@ struct NBPSystemProperties{N}
 end
 
 function NBPSystemProperties(center::Symbol, bodies::Vararg{Symbol})
-    center_id = bodn2c(String(center))
-    bodies = SVector(bodies...)
-
     # Load ephemerides for all bodies...
     map(SpiceUtils.load_ephemerides, bodies)
+    bodies = SVector(bodies...)
 
+    center_id = bodn2c(String(center))
     body_ids = @. bodn2c(String(bodies))
     μ = SpiceUtils.get_GM.(body_ids)
     NBPSystemProperties(center, center_id, bodies, body_ids, μ)
