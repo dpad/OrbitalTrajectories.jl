@@ -31,9 +31,9 @@ To later update to the newest release, simply do ```update OrbitalTrajectories``
   - **Restricted N-Body Problem** (`EphemerisNBP`)
     - Body states computed from NASA NAIF (SPICE) ephemerides downloaded automatically as needed
     - Automatic SPICE dynamic reference frames built for conversions
-- Computation of State Transition Matrices (STMs):
-  - Using fast, accurate Automatic Differentiation (AD) for every model
-  - Using symbolically computed Variational Equations (VE) for some models
+- Differentiable models supporting computation of State Transition Matrices (STMs) using:
+  - Fast, accurate Automatic Differentiation (AD) for every model
+  - Symbolically computed Variational Equations (VE) for some models
   - Hand-tuned variational equations for CR3BP model
 - Generic single-shooting differential corrector, supporting:
   - Finding axisymmetric (quasi-)periodic orbits in every model
@@ -42,7 +42,7 @@ To later update to the newest release, simply do ```update OrbitalTrajectories``
   - Plot trajectories in inertial/rotating frames
   - Show primary body, secondary body, and libration points
   - Plot orbit families with custom-valued colourbars
-- Support for Julia's highly-composable state-of-the-art ecosystem for machine learning, statistical analysis, and more
+- Support for using Julia's highly-composable state-of-the-art ecosystem for optimisation, machine learning, statistical analysis, uncertainty quantification, and much more
 
 ## License & References
 Distributed under the [Apache License 2.0](LICENSE)
