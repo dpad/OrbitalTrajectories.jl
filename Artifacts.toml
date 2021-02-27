@@ -39,7 +39,7 @@ lazy = true
     url = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/sat427.bsp"
 
 [spice_kernels]
-git-tree-sha1 = "fea600af0a348dae8ae7b237de06fd6e980a3e2f"
+git-tree-sha1 = "54c9d4d1387b1a01dc34bcabc20d55718533f6a7"
 
 [uranus_ephemerides]
 git-tree-sha1 = "485611530fba5f446096fc61ec6735a5131a42c6"
