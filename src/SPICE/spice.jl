@@ -40,17 +40,22 @@ module SpiceUtils
         # Do we need to load any ephemerides for this body?
         body_name = lowercase(String(body_name))
         body_ID   = bodn2c(body_name)
+        if body_ID < 100 || body_ID > 1000
+            return false # This is some non-planetary body
+        end
         body_idx_in_system = body_ID % 100
 
         if body_idx_in_system == 0 || body_idx_in_system == 99
-            # This is the primary (planetary) body, so is already included in the default kernels.
-            return true
+            return true  # This is the primary (planetary) body, so is already included in the default kernels.
         end
 
         # Otherwise, let's load the planetary system
         system_ID = ((body_ID ÷ 100) * 100) + 99
-        system_name = lowercase(bodc2n(system_ID))
-        artifact_name = "$(system_name)_ephemerides"
+        system_name = bodc2n(system_ID)
+        if isnothing(system_name)
+            return false  # Could not find this planetary system!
+        end
+        artifact_name = "$(lowercase(system_name))_ephemerides"
 
         # Check if we've defined a default kernel for this planetary system.
         meta = artifact_meta(artifact_name, artifacts_toml)
