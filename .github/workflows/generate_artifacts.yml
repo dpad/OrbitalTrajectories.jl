@@ -1,4 +1,4 @@
-name: Artifacts
+name: Update Artifacts.toml
 
 on:
   workflow_dispatch:
@@ -32,7 +32,7 @@ jobs:
       - name: Build Artifacts.toml
         run: julia --project=. -e 'using Pkg; Pkg.build(verbose=true)'
 
-      - uses: actions/upload-artifact@v2
+      - uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          name: artifacts
-          path: Artifacts.toml
+          commit_message: Update Artifacts.toml
+          file_pattern: Artifacts.toml
