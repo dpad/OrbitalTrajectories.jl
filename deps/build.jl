@@ -14,14 +14,13 @@ if isnothing(default_kernels) || !artifact_exists(default_kernels)
             "spk/planets/de430.bsp",
         ]
         for kernel in kernels 
-            file_path = joinpath(artifact_dir, basename(kernel))
-            if !isfile(file_path)
-                download(join((SPICE_url_base, kernel), "/"), joinpath(artifact_dir, basename(kernel)))
-            end
+            download(join((SPICE_url_base, kernel), "/"), joinpath(artifact_dir, basename(kernel)))
         end
     end
-    if isnothing(default_kernels)
+    if isnothing(default_kernels) && Sys.islinux()
         bind_artifact!(artifact_toml, "spice_kernels", spice_kernels)
+    elseif !Sys.islinux()
+        @warn "Could not bind artifact, need to run on Linux so the hashes are correct!"
     end
 end
 
@@ -45,6 +44,10 @@ for (system, kernel) in kernels
         artifact = create_artifact() do artifact_dir
             download(download_URL, joinpath(artifact_dir, basename(kernel)))
         end
-        bind_artifact!(artifact_toml, artifact_name, artifact; download_info=[(download_URL, "")], lazy=true)
+        if Sys.islinux()
+            bind_artifact!(artifact_toml, artifact_name, artifact; download_info=[(download_URL, "")], lazy=true)
+        else
+            @warn "Could not bind artifact, need to run on Linux so the hashes are correct!"
+        end
     end
 end

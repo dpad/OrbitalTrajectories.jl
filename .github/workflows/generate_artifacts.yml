@@ -1,0 +1,38 @@
+name: Artifacts
+
+on:
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  artifacts:
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        julia_version:
+          - '1.5.3'
+        os:
+          - ubuntu-latest
+        arch:
+          - x64
+
+    steps:
+      
+      # Setup environment
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@latest
+        with:
+          version: ${{ matrix.julia_version }}
+
+      - name: Build Artifacts.toml
+        run: julia --project=. -e 'using Pkg; Pkg.build(verbose=true)'
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: artifacts
+          path: Artifacts.toml
