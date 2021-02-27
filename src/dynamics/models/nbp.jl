@@ -15,6 +15,10 @@ end
 function NBPSystemProperties(center::Symbol, bodies::Vararg{Symbol})
     center_id = bodn2c(String(center))
     bodies = SVector(bodies...)
+
+    # Load ephemerides for all bodies...
+    map(SpiceUtils.load_ephemerides, bodies)
+
     body_ids = @. bodn2c(String(bodies))
     μ = SpiceUtils.get_GM.(body_ids)
     NBPSystemProperties(center, center_id, bodies, body_ids, μ)
@@ -86,10 +90,6 @@ function EphemerisNBP(bodies::Vararg{Symbol}; center=nothing, kwargs...)
     all_bodies = isnothing(center) ? (bodies[1], bodies...) : (center, bodies...)
     bodies_symbols = @. Symbol(lowercase(String(all_bodies)))
     props = NBPSystemProperties(bodies_symbols...)
-
-    # Load ephemerides for all bodies...
-    map(SpiceUtils.load_ephemerides, all_bodies)
-
     EphemerisNBP(_NBP_ODEFunctions(props; kwargs...), props)
 end
 

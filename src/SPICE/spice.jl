@@ -15,90 +15,76 @@ module SpiceUtils
     export pos_to_synodic, pos_from_synodic
 
     function __init__()
-        # Load a set of default SPICE kernels for all the main planetary bodies.
-        furnsh(readdir(artifact"spice_kernels", join=true)...)
+        # Load the meta kernels
+        load_kernel_artifact("meta_kernels")
         nothing
     end
 
     const artifacts_toml = find_artifacts_toml(@__DIR__)
     const kernel_bodies = Dict(
         # List of bodies included in each default kernel file (as specified in build.jl)
-        "mar097.bsp" => tuple(401:402...),
-        "jup310.bsp" => tuple(501:505..., 514:516...),
-        "sat427.bsp" => tuple(601:609..., 612:614..., 632, 634),
-        "ura111.bsp" => tuple(701:705...),
-        "nep095.bsp" => tuple(801:808..., 814),
-        "plu055.bsp" => tuple(901:905...)
+        "default" => tuple(1:10..., 199, 299, 301, 399),
+        "mars"    => tuple(401:402..., 499),
+        "jupiter" => tuple(501:505..., 514:516..., 599),
+        "saturn"  => tuple(601:609..., 612:614..., 632, 634, 699),
+        "uranus"  => tuple(701:705..., 799),
+        "neptune" => tuple(801:808..., 814, 899),
+        "pluto"   => tuple(901:905..., 999)
     )
+    const body_to_kernel = Dict(idx => kernel for (kernel, bodies) in kernel_bodies for idx in bodies)
     @memoize function load_ephemerides(body_name)
         # XXX: This is a bit of a hacky workaround of the existing Pkg.Artifacts system,
         # which supports lazy artifact loading but assumes the files it downloads are
-        # gzipped. However, our kernels are just files straight from the NAIF site, so
-        # we instead load them lazily here. This means that artifact"(body)_ephemerides"
-        # will not work.
-
-        # Do we need to load any ephemerides for this body?
+        # gzipped. However, our kernels are just files straight from the NAIF site, so we
+        # instead load them lazily here. artifact"(body)_kernels" will only work after this.
         body_name = lowercase(String(body_name))
         body_ID   = bodn2c(body_name)
-        if body_ID < 100 || body_ID > 1000
-            return false # This is some non-planetary body
-        end
-        body_idx_in_system = body_ID % 100
 
-        if body_idx_in_system == 0 || body_idx_in_system == 99
-            return true  # This is the primary (planetary) body, so is already included in the default kernels.
+        if body_ID ∉ keys(body_to_kernel)
+            @warn """No default kernel specified for "$(titlecase(body_name))".
+            You may need to manually download relevant kernels and load them with `SPICE.furnsh(path_to_kernel)`."""
+            return false
         end
 
-        # Otherwise, let's load the planetary system
-        system_ID = ((body_ID ÷ 100) * 100) + 99
-        system_name = bodc2n(system_ID)
-        if isnothing(system_name)
-            return false  # Could not find this planetary system!
-        end
-        artifact_name = "$(lowercase(system_name))_ephemerides"
+        artifact_name = "$(body_to_kernel[body_ID])_kernels"
+        load_kernel_artifact(artifact_name)
+        return true
+    end
 
-        # Check if we've defined a default kernel for this planetary system.
+    function load_kernel_artifact(artifact_name)
+        # Get artifact details.
         meta = artifact_meta(artifact_name, artifacts_toml)
-        if isnothing(meta)
-            # No default kernels specified for this system. Either the body already exists in
-            # the `spice_kernels` default (e.g. the Moon), or we just didn't specify it in 
-            # build.jl / Artifacts.toml.
-            # We don't necessarily want to warn the user (e.g. the Moon) because SPICE will
-            # error out anyway if it doesn't have sufficient data to propagate the body.
-            return false
-        end
+        isnothing(meta) && error("Expected to find $(artifact_name) in Artifacts.toml, but could not find it!")
         
-        # Get information about the default kernels specified in build.jl / Artifacts.toml
-        meta_hash = Base.SHA1(meta["git-tree-sha1"])
-        download_url = meta["download"][1]["url"]
-        kernel_dir = artifact_path(meta_hash)
-        kernel_path = joinpath(kernel_dir, basename(download_url))
-
-        # Check if the body exists in this kernel
-        if body_ID ∉ kernel_bodies[basename(download_url)]
-            @warn """The $(basename(download_url)) kernel does not contain data for the $(titlecase(body_name)) body.
-            You may need to manually download other kernels and load them with `SPICE.furnsh(path_to_kernel)`."""
-            return false
-        end
+        # Get kernel details from this artifact.
+        meta_hash     = Base.SHA1(meta["git-tree-sha1"])
+        download_URLs = [d["url"] for d in meta["download"]]
+        kernel_dir    = artifact_path(meta_hash)
+        kernel_paths  = [joinpath(kernel_dir, basename(url)) for url in download_URLs]
 
         # Check if the kernel has already been downloaded before, and if not, download it.
-        if !artifact_exists(meta_hash) || !isfile(kernel_path)
-            progress = begin
-                max_n = 10000
-                bar = Progress(max_n; desc="Downloading $(basename(download_url)) ephemerides", color=Base.info_color())
-                (total, now) -> update!(bar, total > 0 ? round(Int, (now / total) * max_n) : 0)
-            end
-            try
+        for (kernel, url) in zip(kernel_paths, download_URLs)
+            if !artifact_exists(meta_hash) || !isfile(kernel)
                 mkpath(kernel_dir)
-                Downloads.download(download_url, kernel_path; progress)
-            finally
-                finish!(bar)
+                progress = begin
+                    max_n = 10000
+                    bar = Progress(max_n; desc="Downloading NAIF $(basename(url))", color=Base.info_color())
+                    (total, now) -> update!(bar, total > 0 ? round(Int, (now / total) * max_n) : 0)
+                end
+
+                # Download the kernel into the artifacts folder.
+                try
+                    Downloads.download(url, kernel; progress)
+                finally
+                    finish!(bar)
+                end
             end
+
+            # Load the kernel into SPICE.
+            furnsh(kernel)
         end
 
-        # Load the planetary system kernel.
-        furnsh(kernel_path)
-        return true
+        nothing
     end
 
     @doc "Get a target body position from SPICE kernels."
