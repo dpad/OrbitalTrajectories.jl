@@ -1,21 +1,99 @@
 module SpiceUtils
 
+    using Downloads
     using Dates
     using SPICE
     using ModelingToolkit
+    using ProgressMeter
     using Pkg.Artifacts
     using ForwardDiff
     using StaticArrays
+    using Memoize
 
     export mass_fraction
     export state_to_synodic, state_from_synodic
     export pos_to_synodic, pos_from_synodic
 
     function __init__()
-        # Load a set of default SPICE kernels for this project
-        @info "Reading kernels $(readdir(artifact"spice_kernels"))"
+        # Load a set of default SPICE kernels for all the main planetary bodies.
         furnsh(readdir(artifact"spice_kernels", join=true)...)
         nothing
+    end
+
+    const artifacts_toml = find_artifacts_toml(@__DIR__)
+    const kernel_bodies = Dict(
+        # List of bodies included in each default kernel file (as specified in build.jl)
+        "mar097.bsp" => tuple(401:402...),
+        "jup310.bsp" => tuple(501:505..., 514:516...),
+        "sat427.bsp" => tuple(601:609..., 612:614..., 632, 634),
+        "ura111.bsp" => tuple(701:705...),
+        "nep095.bsp" => tuple(801:808..., 814),
+        "plu055.bsp" => tuple(901:905...)
+    )
+    @memoize function load_ephemerides(body_name)
+        # XXX: This is a bit of a hacky workaround of the existing Pkg.Artifacts system,
+        # which supports lazy artifact loading but assumes the files it downloads are
+        # gzipped. However, our kernels are just files straight from the NAIF site, so
+        # we instead load them lazily here. This means that artifact"(body)_ephemerides"
+        # will not work.
+
+        # Do we need to load any ephemerides for this body?
+        body_name = lowercase(String(body_name))
+        body_ID   = bodn2c(body_name)
+        body_idx_in_system = body_ID % 100
+
+        if body_idx_in_system == 0 || body_idx_in_system == 99
+            # This is the primary (planetary) body, so is already included in the default kernels.
+            return true
+        end
+
+        # Otherwise, let's load the planetary system
+        system_ID = ((body_ID ÷ 100) * 100) + 99
+        system_name = lowercase(bodc2n(system_ID))
+        artifact_name = "$(system_name)_ephemerides"
+
+        # Check if we've defined a default kernel for this planetary system.
+        meta = artifact_meta(artifact_name, artifacts_toml)
+        if isnothing(meta)
+            # No default kernels specified for this system. Either the body already exists in
+            # the `spice_kernels` default (e.g. the Moon), or we just didn't specify it in 
+            # build.jl / Artifacts.toml.
+            # We don't necessarily want to warn the user (e.g. the Moon) because SPICE will
+            # error out anyway if it doesn't have sufficient data to propagate the body.
+            return false
+        end
+        
+        # Get information about the default kernels specified in build.jl / Artifacts.toml
+        meta_hash = Base.SHA1(meta["git-tree-sha1"])
+        download_url = meta["download"][1]["url"]
+        kernel_dir = artifact_path(meta_hash)
+        kernel_path = joinpath(kernel_dir, basename(download_url))
+
+        # Check if the body exists in this kernel
+        if body_ID ∉ kernel_bodies[basename(download_url)]
+            @warn """The $(basename(download_url)) kernel does not contain data for the $(titlecase(body_name)) body.
+            You may need to manually download other kernels and load them with `SPICE.furnsh(path_to_kernel)`."""
+            return false
+        end
+
+        # Check if the kernel has already been downloaded before, and if not, download it.
+        if !artifact_exists(meta_hash) || !isfile(kernel_path)
+            progress = begin
+                max_n = 10000
+                bar = Progress(max_n; desc="Downloading $(basename(download_url)) ephemerides", color=Base.info_color())
+                (total, now) -> update!(bar, total > 0 ? round(Int, (now / total) * max_n) : 0)
+            end
+            try
+                mkpath(kernel_dir)
+                Downloads.download(download_url, kernel_path; progress)
+            finally
+                finish!(bar)
+            end
+        end
+
+        # Load the planetary system kernel.
+        furnsh(kernel_path)
+        return true
     end
 
     @doc "Get a target body position from SPICE kernels."
