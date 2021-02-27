@@ -23,7 +23,7 @@ for (system, kernels) in all_kernels
         # download it lazily in SpiceUtils.
         download_info = [(join((SPICE_url_base, kernel), "/"), "") for kernel in kernels]
         artifact = create_artifact() do artifact_dir
-            for download_URL in download_info
+            for (download_URL, _) in download_info
                 @info "Downloading $(basename(download_URL))..."
                 download(download_URL, joinpath(artifact_dir, basename(download_URL)))
             end
