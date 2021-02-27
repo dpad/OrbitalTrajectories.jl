@@ -14,12 +14,6 @@ module SpiceUtils
     export state_to_synodic, state_from_synodic
     export pos_to_synodic, pos_from_synodic
 
-    function __init__()
-        # Load the meta kernels
-        load_kernel_artifact("meta_kernels")
-        nothing
-    end
-
     const artifacts_toml = find_artifacts_toml(@__DIR__)
     const kernel_bodies = Dict(
         # List of bodies included in each default kernel file (as specified in build.jl)
@@ -32,11 +26,14 @@ module SpiceUtils
         "pluto"   => tuple(901:905..., 999)
     )
     const body_to_kernel = Dict(idx => kernel for (kernel, bodies) in kernel_bodies for idx in bodies)
+
+    function __init__()
+        load_kernel_artifact("meta_kernels")
+        load_kernel_artifact("default_kernels")
+        nothing
+    end
+
     @memoize function load_ephemerides(body_name)
-        # XXX: This is a bit of a hacky workaround of the existing Pkg.Artifacts system,
-        # which supports lazy artifact loading but assumes the files it downloads are
-        # gzipped. However, our kernels are just files straight from the NAIF site, so we
-        # instead load them lazily here. artifact"(body)_kernels" will only work after this.
         body_name = lowercase(String(body_name))
         body_ID   = bodn2c(body_name)
 
@@ -47,11 +44,15 @@ module SpiceUtils
         end
 
         artifact_name = "$(body_to_kernel[body_ID])_kernels"
-        load_kernel_artifact(artifact_name)
-        return true
+        return load_kernel_artifact(artifact_name)
     end
 
-    function load_kernel_artifact(artifact_name)
+    @memoize function load_kernel_artifact(artifact_name)
+        # XXX: This is a bit of a hacky workaround of the existing Pkg.Artifacts system,
+        # which supports lazy artifact loading but assumes the files it downloads are
+        # gzipped. However, our kernels are just files straight from the NAIF site, so we
+        # instead load them lazily here. artifact"(body)_kernels" will only work after this.
+
         # Get artifact details.
         meta = artifact_meta(artifact_name, artifacts_toml)
         isnothing(meta) && error("Expected to find $(artifact_name) in Artifacts.toml, but could not find it!")
@@ -84,7 +85,7 @@ module SpiceUtils
             furnsh(kernel)
         end
 
-        nothing
+        return true
     end
 
     @doc "Get a target body position from SPICE kernels."
