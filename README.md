@@ -4,7 +4,7 @@
 |:--------:|:----------------------:|:-----:|:-----:|
 |[![](https://img.shields.io/badge/docs-online-blue.svg)](https://dpad.github.io/OrbitalTrajectories.jl/stable/)| [![CI](https://github.com/dpad/OrbitalTrajectories.jl/workflows/CI/badge.svg)](https://github.com/dpad/OrbitalTrajectories.jl/actions) [![codecov](https://codecov.io/gh/dpad/OrbitalTrajectories.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/dpad/OrbitalTrajectories.jl) | [![DOI](https://img.shields.io/badge/Conference%20paper-Padilha%20et%20al%202021-brightgreen)](https://www.researchgate.net/publication/348929030_Modern_Numerical_Programming_with_Julia_for_Astrodynamic_Trajectory_Design) | [![GitHub license](https://img.shields.io/github/license/dpad/OrbitalTrajectories.jl)](LICENSE)
 
-*OrbitalTrajectories.jl is a modern orbital trajectory design, optimisation, and analysis library for Julia. Provides tools and methods for astrodynamical models, spacecraft orbits, and more.*
+*OrbitalTrajectories.jl is a modern orbital trajectory design, optimisation, and analysis library for Julia, providing methods and tools for designing spacecraft orbits and transfers via high-performance simulations of astrodynamical models.*
 
 ---
 
