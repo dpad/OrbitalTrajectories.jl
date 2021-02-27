@@ -20,7 +20,9 @@ if isnothing(default_kernels) || !artifact_exists(default_kernels)
             end
         end
     end
-    bind_artifact!(artifact_toml, "spice_kernels", spice_kernels; force=true)
+    if isnothing(default_kernels)
+        bind_artifact!(artifact_toml, "spice_kernels", spice_kernels)
+    end
 end
 
 # System-specific kernels are downloaded lazily
@@ -43,6 +45,6 @@ for (system, kernel) in kernels
         artifact = create_artifact() do artifact_dir
             download(download_URL, joinpath(artifact_dir, basename(kernel)))
         end
-        bind_artifact!(artifact_toml, artifact_name, artifact; download_info=[(download_URL, "")], lazy=true, force=true)
+        bind_artifact!(artifact_toml, artifact_name, artifact; download_info=[(download_URL, "")], lazy=true)
     end
 end
