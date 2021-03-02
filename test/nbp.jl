@@ -2,6 +2,7 @@ using OrbitalTrajectories
 
 using Test
 using DifferentialEquations
+using BenchmarkTools
 
 @testset "convert_to_frame" begin
     u0 = [0.8574053516112442, 0., 0., 0., 0.47, 0.]
@@ -33,4 +34,26 @@ using DifferentialEquations
     sol = solve(prob)
     sol2 = convert_to_frame(sol, SynodicFrame())
     @test sol2.sol.u[begin] ≈ u0
+end
+
+@testset "EphemerisNBP performance with/without CSE" begin
+    u0 = [0.8574053516112442, 0., 0., 0., 0.47, 0.]
+    bodies = (:earth, :moon)
+
+    # NOTE: This test only works for EphemerisNBP (other models remain equally performant)
+    model = EphemerisNBP
+    sys = model(bodies...)
+
+    tspan = isa(sys, EphemerisNBP) ? (0., 3600.0*24*30) : (0, 2π)
+    prob = State(sys, SynodicFrame(), u0, tspan)
+
+    # Test default performance of prob (with CSE)
+    time_new = @benchmark solve($prob)
+
+    # Test the old performance of prob (turn off Common Subexpression Elimination)
+    sys_old = model(bodies...; wrap_code=(nothing, nothing))
+    prob_old = State(sys_old, SynodicFrame(), u0, tspan)
+    time_old = @benchmark solve($prob_old)
+
+    @test 10 * median(time_new.times) < median(time_old.times)  # At least a 10x improvement
 end
