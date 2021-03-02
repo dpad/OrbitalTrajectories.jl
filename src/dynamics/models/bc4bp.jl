@@ -39,7 +39,7 @@ function ModelingToolkit.ODESystem(::Type{_BC4BP_ODEFunctions})
     eqs    = @. D2(p) ~ [+2D(y) + x, -2D(x) + y, 0] + forces
 
     # Simplify and return the system
-    return ODESystem(simplify.(eqs), t, [x, y, z], [μ, μ2, a3, α0, a3, ω3]), []
+    return ODESystem(simplify.(eqs), t, [x, y, z], [μ, μ2, a3, α0, a3, ω3])
 end
 
 # Build the equations at pre-compile time

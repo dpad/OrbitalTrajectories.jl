@@ -91,3 +91,26 @@ end
 # --------------------------------#
 # End of copyrighted code         #
 # --------------------------------#
+
+function _cse(eq::Num, dict)
+    final = _cse(Symbolics.value(eq), dict)
+    Num(final)
+end
+
+function _cse(eq::Equation, dict)
+    lhs = _cse(eq.lhs, dict)
+    rhs = _cse(eq.rhs, dict)
+    Equation(lhs, rhs)
+end
+
+function cse(x::LiteralExpr)
+    # XXX: Assumes that the LiteralExpr contains a LineNumber as the first argument
+    LiteralExpr(quote
+        $(cse.(x.ex.args[2:end])...)
+    end)
+end
+
+function cse(x::Func)
+    body = cse(x.body)
+    return Func(x.args, x.kwargs, body)
+end
