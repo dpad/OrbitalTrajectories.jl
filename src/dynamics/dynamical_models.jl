@@ -77,6 +77,11 @@ ModelingToolkit.varmap_to_vars(model::Abstract_DynamicalModel, varmap) = Modelin
 DiffEqBase.isinplace(f::Abstract_DynamicalModel, _) = true
 
 # XXX: Need these due to new ModelingToolkit interface.
+function Base.getproperty(sys::Abstract_ModelODEFunctions, name::Symbol)
+    # XXX: This is very much needed to avoid the depwarn introduced in
+    # ModelingToolkit, especially in Pkg.test() environments!
+    return getfield(sys, name)
+end
 ModelingToolkit.get_systems(::Abstract_ModelODEFunctions) = []
 ModelingToolkit.get_eqs(f::Abstract_ModelODEFunctions) = ModelingToolkit.get_eqs(f.ode_system)
 ModelingToolkit.get_states(f::Abstract_ModelODEFunctions) = ModelingToolkit.get_states(f.ode_system)

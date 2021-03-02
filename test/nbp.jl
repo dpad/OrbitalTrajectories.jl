@@ -44,7 +44,7 @@ end
     model = EphemerisNBP
     sys = model(bodies...)
 
-    tspan = isa(sys, EphemerisNBP) ? (0., 3600.0*24*30) : (0, 2π)
+    tspan = (0., 3600.0*24*30) 
     prob = State(sys, SynodicFrame(), u0, tspan)
 
     # Test default performance of prob (with CSE)
