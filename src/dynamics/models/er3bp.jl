@@ -29,7 +29,7 @@ function ModelingToolkit.ODESystem(::Type{_ER3BP_ODEFunctions})
         f,
         [x, y, z],
         [μ, e]
-    ), []
+    )
 end
 
 @doc "Centrifugal potential [DeiTos2017, Eq.13; Ichinomiya 2018, Eq. 2.2]"

@@ -2,9 +2,12 @@
 # GENERIC MODEL METHODS #
 #-----------------------#
 
+import ..cse
+
+# wrap_code: perform common substring elimination to improve performance of the resulting models.
 @doc """Generic constructor for a DynamicalModel's underlying ODEFunctions."""
-function (T::Type{<:Abstract_ModelODEFunctions})(args...; kwargs...)
-    _ode, deduplicate_terms = ODESystem(T, args...; kwargs...)
+function (T::Type{<:Abstract_ModelODEFunctions})(args...; wrap_code=(cse, cse), kwargs...)
+    _ode = ODESystem(T, args...; kwargs...)
 
     # Reduce high-order system to 1st-order (re-ordering to keep the original equations first)
     # NOTE: need to expand the RHS derivatives before calling order-lowering
@@ -17,8 +20,8 @@ function (T::Type{<:Abstract_ModelODEFunctions})(args...; kwargs...)
 
     # Generate the functions
     # TODO: Add support for tgrad (need to define derivative(get_pos) for EphemerisNBP)
-    ode_f = ODEFunction(ode; jac=true, tgrad=false, eval_expression=false, eval_module=@__MODULE__, deduplicate_terms)
-    ode_stm_f = STM_ODEFunction(ode, ode_f; deduplicate_terms)
+    ode_f = ODEFunction(ode; jac=true, tgrad=false, eval_expression=false, eval_module=@__MODULE__, wrap_code)
+    ode_stm_f = STM_ODEFunction(ode, ode_f; wrap_code)
     T(ode, ode_f, ode_stm_f)
 end
 
@@ -34,7 +37,7 @@ has_jacobian(X::Type{<:DiffEqBase.ODEFunction}) = !isnothing(fieldtype(X, :jac))
     Matrix simultaneously with the given function f. This requires f to have
     a computable Jacobian function.
 """
-@traitfn function STM_ODEFunction(ode::ModelingToolkit.AbstractODESystem, f::::HasJacobian; deduplicate_terms=[])
+@traitfn function STM_ODEFunction(ode::ModelingToolkit.AbstractODESystem, f::::HasJacobian; kwargs...)
     # TODO: Output just the variational equations, join as a SplitODEProblem
     # TODO: Memoize this function! It's very slightly slow for EphemerisNBP
 
@@ -62,7 +65,7 @@ has_jacobian(X::Type{<:DiffEqBase.ODEFunction}) = !isnothing(fieldtype(X, :jac))
         iv,
         [dvs..., ϕ...],  # Append the STM and motion state variables
         params)
-    stm_f = ODEFunction(stm_ode; sparse=true, eval_expression=false, eval_module=@__MODULE__, deduplicate_terms)
+    stm_f = ODEFunction(stm_ode; sparse=true, eval_expression=false, eval_module=@__MODULE__, kwargs...)
 end
 
 #---------#
@@ -74,6 +77,11 @@ ModelingToolkit.varmap_to_vars(model::Abstract_DynamicalModel, varmap) = Modelin
 DiffEqBase.isinplace(f::Abstract_DynamicalModel, _) = true
 
 # XXX: Need these due to new ModelingToolkit interface.
+function Base.getproperty(sys::Abstract_ModelODEFunctions, name::Symbol)
+    # XXX: This is very much needed to avoid the depwarn introduced in
+    # ModelingToolkit, especially in Pkg.test() environments!
+    return getfield(sys, name)
+end
 ModelingToolkit.get_systems(::Abstract_ModelODEFunctions) = []
 ModelingToolkit.get_eqs(f::Abstract_ModelODEFunctions) = ModelingToolkit.get_eqs(f.ode_system)
 ModelingToolkit.get_states(f::Abstract_ModelODEFunctions) = ModelingToolkit.get_states(f.ode_system)

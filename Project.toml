@@ -4,6 +4,7 @@ authors = ["Dan Padilha"]
 version = "0.1.0"
 
 [deps]
+DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DiffEqBase = "2b5f629d-d688-5b77-993f-72d75c75574e"
 DiffEqSensitivity = "41bf760c-e81c-5289-8e54-58b1f1f8abe2"
@@ -33,9 +34,12 @@ SimpleTraits = "699a6c99-e7fa-54fc-8d76-47d257e15c1d"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StatsPlots = "f3b207a7-027a-5e70-b257-86293d7955fd"
+SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
+Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
+DataStructures = "0.18.9"
 DiffEqBase = "6.53.5"
 DiffEqSensitivity = "6.42.0"
 DifferentialEquations = "6.16.0"
@@ -61,5 +65,7 @@ SciMLBase = "1.8"
 SimpleTraits = "0.9.3"
 StaticArrays = "0.12.5, 1.0"
 StatsPlots = "0.14.17"
+SymbolicUtils = "0.8.4"
+Symbolics = "0.1.2"
 Unitful = "1.5.0"
 julia = "1.5.3"

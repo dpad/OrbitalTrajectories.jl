@@ -35,15 +35,13 @@ struct _NBP_ODEFunctions{S,F,F2} <: Abstract_ModelODEFunctions
 end
 
 # XXX: Need the "T" in place for @memoize to work
-@memoize function ModelingToolkit.ODESystem(T::Type{_NBP_ODEFunctions}, props::NBPSystemProperties; deduplicate=true)
+@memoize function ModelingToolkit.ODESystem(T::Type{_NBP_ODEFunctions}, props::NBPSystemProperties)
     @parameters t  # Time in J2000 epoch
     @variables x(t) y(t) z(t)
     D2 = Differential(t)^2
 
     accelerations = zeros(Num, 3)
     pos = [x, y, z]
-
-    deduplicate_terms = []
 
     for (body, μ) in zip(props.bodies, props.μ)
         # See also [DeiTos2017, Eqs. 14], [JTOP implementation], [Ozaki2017, Eq.2]
@@ -56,7 +54,6 @@ end
             # NOTE: the body and center need to be converted to Num{String} for the @registered function to work.
             #       Num{Symbol} won't work because they convert to variable names instead of Symbols.
             body_pos_term = SpiceUtils.get_pos(t, String(body), String(props.center))
-            deduplicate && push!(deduplicate_terms, body_pos_term) # TODO!!!! XXX IS IT THIS THAT IS CAUSING VAREQNS TO FAIL???
 
             # XXX: Need to manually build the vector since the compiler won't know the size of body_pos otherwise.
             # TODO: Fix the allocation cost of this. view() and reshape() are not defined for Nums...
@@ -73,8 +70,7 @@ end
     eqs = @. D2(pos) ~ sum(accelerations)
 
     # Build the 2nd-order ODE props
-    _ode = ODESystem(eqs, t, pos, [])
-    return ODESystem(eqs, t, pos, []), deduplicate_terms
+    return ODESystem(eqs, t, pos, [])
 end
 
 #---------------------#
