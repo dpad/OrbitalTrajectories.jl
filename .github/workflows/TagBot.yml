@@ -18,12 +18,14 @@ jobs:
             {% if custom %}
             {{ custom }}
             {% endif %}
+
             {% if pulls %}
             **Changes:**
             {% for pull in pulls %}
             - {{ pull.title }} (#{{ pull.number }}, by @{{ pull.author.username }})
             {% endfor %}
             {% endif %}
+
             {% if previous_release %}
             [Diff since {{ previous_release }}]({{ compare_url }})
             {% endif %}
