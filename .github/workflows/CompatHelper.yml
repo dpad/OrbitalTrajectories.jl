@@ -15,23 +15,16 @@ jobs:
           COMPATHELPER_PRIV: ${{ secrets.ORBITALTRAJECTORIES_DEPLOY_SSH_KEY }}
         run: julia -e '
           using CompatHelper;
-          using Pkg;
-          Pkg.activate(".");
-          Pkg.add(["TOML"]);
-          using TOML;
           CompatHelper.main() do;
-            CompatHelper.update_manifests(); 
-            proj = Pkg.project();
-            proj_toml = nothing;
-            open(proj.path; read=true) do file;
-              global proj_toml = TOML.parse(file);
-            end;
-            open(proj.path; write=true) do file;
+            proj_path = joinpath(pwd(), "Project.toml");
+            proj_toml = Pkg.TOML.parsefile(proj_path);
+            open(proj_path; write=true) do file;
               version = VersionNumber(proj_toml["version"]);
               new_version = Base.nextpatch(version);
               io = IOBuffer();
               print(io, new_version);
               proj_toml["version"] = String(take!(io));
-              TOML.print(file, proj_toml; sorted = true, by = key -> (Pkg.Types.project_key_order(key), key));
+              Pkg.TOML.print(file, proj_toml; sorted = true, by = key -> (Pkg.Types.project_key_order(key), key));
             end;
+            CompatHelper.update_manifests(); 
           end;'
