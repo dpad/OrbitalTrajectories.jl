@@ -1,7 +1,7 @@
 name = "OrbitalTrajectories"
 uuid = "2b613a20-8d2a-5290-b19f-e06f4bcc2e7d"
 authors = ["Dan Padilha"]
-version = "0.1.3"
+version = "0.1.4"
 
 [deps]
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
@@ -66,6 +66,6 @@ SimpleTraits = "0.9.3"
 StaticArrays = "0.12.5, 1.0"
 StatsPlots = "0.14.17"
 SymbolicUtils = "0.8.4, 0.9"
-Symbolics = "0.1.2 - 0.1.3"
+Symbolics = "0.1.2"
 Unitful = "1.5.0"
 julia = "1.5.3"
