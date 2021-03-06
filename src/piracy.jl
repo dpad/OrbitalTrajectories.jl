@@ -21,7 +21,7 @@ LinearAlgebra.norm(a::AbstractArray{<:ModelingToolkit.Num}) = sum(a .^ 2)^(1/2)
 # --------------------------------#
 # Common Subexpression Evaluation #
 # --------------------------------#
-using SymbolicUtils.Code: Let, Func, MakeArray, SetArray, (←), LiteralExpr
+using SymbolicUtils.Code: Let, Func, MakeArray, SetArray, (←), LiteralExpr, AtIndex
 using Symbolics: Equation
 
 # Code below copied from Shashi Gowda's work in https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/200
@@ -95,6 +95,11 @@ end
 function _cse(eq::Num, dict)
     final = _cse(Symbolics.value(eq), dict)
     Num(final)
+end
+
+function _cse(eq::AtIndex, dict)
+    final = _cse(eq.elem, dict)
+    AtIndex(eq.i, final)
 end
 
 function _cse(eq::Equation, dict)
