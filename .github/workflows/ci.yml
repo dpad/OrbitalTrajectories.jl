@@ -4,11 +4,10 @@ on:
   push:
     branches:
       - master
+    tags: 'v*'
   pull_request:
     branches:
       - master
-  release:
-    types: [published]
 
 defaults:
   run:
@@ -31,6 +30,11 @@ jobs:
           - x64
 
     steps:
+
+      - name: Cancel CI on previous commits
+        uses: styfle/cancel-workflow-action@0.6.0
+        with:
+          access_token: ${{ github.token }}
       
       # Setup environment
       - uses: actions/checkout@v2
@@ -89,6 +93,11 @@ jobs:
           - x64
 
     steps:
+
+      - name: Cancel CI on previous commits
+        uses: styfle/cancel-workflow-action@0.6.0
+        with:
+          access_token: ${{ github.token }}
       
       # Setup environment
       - uses: actions/checkout@v2
