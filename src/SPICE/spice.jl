@@ -64,11 +64,10 @@ module SpiceUtils
         kernel_paths  = [basename(url) for url in download_URLs]
 
         # Check if the kernel has already been downloaded before, and if not, download it.
+        temp_dir = mktempdir(first(Artifacts.artifacts_dirs()))
         for (kernel, url) in zip(kernel_paths, download_URLs)
             if !artifact_exists(meta_hash)
-
                 # Make a temporary path to store the unfinished download
-                temp_dir = mktempdir(first(Artifacts.artifacts_dirs()))
                 download_path = joinpath(temp_dir, kernel)
 
                 progress = begin
