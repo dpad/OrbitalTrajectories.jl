@@ -61,28 +61,33 @@ module SpiceUtils
         meta_hash     = Base.SHA1(meta["git-tree-sha1"])
         download_URLs = [d["url"] for d in meta["download"]]
         kernel_dir    = artifact_path(meta_hash)
-        kernel_paths  = [joinpath(kernel_dir, basename(url)) for url in download_URLs]
+        kernel_names  = [basename(url) for url in download_URLs]
 
-        # Check if the kernel has already been downloaded before, and if not, download it.
-        for (kernel, url) in zip(kernel_paths, download_URLs)
-            if !artifact_exists(meta_hash) || !isfile(kernel)
-                mkpath(kernel_dir)
-                progress = begin
-                    max_n = 10000
-                    bar = Progress(max_n; desc="Downloading NAIF $(basename(url))", color=Base.info_color())
-                    (total, now) -> update!(bar, total > 0 ? round(Int, (now / total) * max_n) : 0)
-                end
-
-                # Download the kernel into the artifacts folder.
+        # Check if the kernel has already been downloaded before, and if not, download it to a temporary directory.
+        temp_dir = artifact_exists(meta_hash) ? nothing : mktempdir(first(Artifacts.artifacts_dirs()))
+        if !isnothing(temp_dir)
+            max_n = 10000
+            for (kernel, url) in zip(kernel_names, download_URLs)
+                bar = Progress(max_n; desc="Downloading NAIF kernel: $(kernel)", color=Base.info_color())
+                progress = (total, now) -> update!(bar, total > 0 ? round(Int, (now / total) * max_n) : 0)
                 try
-                    Downloads.download(url, kernel; progress)
+                    Downloads.download(url, joinpath(temp_dir, kernel); progress)
                 finally
                     finish!(bar)
                 end
             end
 
-            # Load the kernel into SPICE.
-            furnsh(kernel)
+            # All kernels are now downloaded; move them into the final kernel folder.
+            mv(temp_dir, kernel_dir)
+        end
+
+        # Load each kernel into SPICE.
+        for (kernel, url) in zip(kernel_names, download_URLs)
+            kernel_path = joinpath(kernel_dir, kernel)
+            if !isfile(kernel_path)
+                error("Could not find kernel file '$(kernel)'. Delete the $(kernel_dir) directory and try again.")
+            end
+            furnsh(kernel_path)
         end
 
         return true
