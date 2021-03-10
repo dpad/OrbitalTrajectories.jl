@@ -61,28 +61,42 @@ module SpiceUtils
         meta_hash     = Base.SHA1(meta["git-tree-sha1"])
         download_URLs = [d["url"] for d in meta["download"]]
         kernel_dir    = artifact_path(meta_hash)
-        kernel_paths  = [joinpath(kernel_dir, basename(url)) for url in download_URLs]
+        kernel_paths  = [basename(url) for url in download_URLs]
 
         # Check if the kernel has already been downloaded before, and if not, download it.
         for (kernel, url) in zip(kernel_paths, download_URLs)
-            if !artifact_exists(meta_hash) || !isfile(kernel)
-                mkpath(kernel_dir)
+            if !artifact_exists(meta_hash)
+
+                # Make a temporary path to store the unfinished download
+                temp_dir = mktempdir(first(Artifacts.artifacts_dirs()))
+                download_path = joinpath(temp_dir, kernel)
+
                 progress = begin
                     max_n = 10000
-                    bar = Progress(max_n; desc="Downloading NAIF $(basename(url))", color=Base.info_color())
+                    bar = Progress(max_n; desc="Downloading NAIF kernel: $(basename(url))", color=Base.info_color())
                     (total, now) -> update!(bar, total > 0 ? round(Int, (now / total) * max_n) : 0)
                 end
 
-                # Download the kernel into the artifacts folder.
+                # Download the kernel into the temporary folder.
                 try
-                    Downloads.download(url, kernel; progress)
+                    Downloads.download(url, download_path; progress)
                 finally
                     finish!(bar)
                 end
             end
+        end
 
-            # Load the kernel into SPICE.
-            furnsh(kernel)
+        # All kernels are now downloaded; move them into the final kernel folder.
+        mv(temp_dir, kernel_dir)
+
+        # Load each kernel into SPICE.
+        for (kernel, url) in zip(kernel_paths, download_URLs)
+            kernel_path = joinpath(kernel_dir, kernel)
+            if !isfile(kernel_path)
+                error("Could not find kernel file '$(kernel)'. Delete the $(kernel_dir) directory and try again.")
+            else
+                furnsh(kernel_path)
+            end
         end
 
         return true
