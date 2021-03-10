@@ -66,16 +66,12 @@ module SpiceUtils
         # Check if the kernel has already been downloaded before, and if not, download it to a temporary directory.
         temp_dir = artifact_exists(meta_hash) ? nothing : mktempdir(first(Artifacts.artifacts_dirs()))
         if !isnothing(temp_dir)
-            # Create a progress bar.
-            progress = (name) -> begin
-                max_n = 10000
-                bar = Progress(max_n; desc="Downloading NAIF kernel: $(name)", color=Base.info_color())
-                (total, now) -> update!(bar, total > 0 ? round(Int, (now / total) * max_n) : 0)
-            end
-
+            max_n = 10000
             for (kernel, url) in zip(kernel_names, download_URLs)
+                bar = Progress(max_n; desc="Downloading NAIF kernel: $(kernel)", color=Base.info_color())
+                progress = (total, now) -> update!(bar, total > 0 ? round(Int, (now / total) * max_n) : 0)
                 try
-                    Downloads.download(url, joinpath(temp_dir, kernel); progress=progress(kernel))
+                    Downloads.download(url, joinpath(temp_dir, kernel); progress)
                 finally
                     finish!(bar)
                 end
