@@ -61,7 +61,7 @@ module SpiceUtils
         meta_hash     = Base.SHA1(meta["git-tree-sha1"])
         download_URLs = [d["url"] for d in meta["download"]]
         kernel_dir    = artifact_path(meta_hash)
-        kernel_paths  = [basename(url) for url in download_URLs]
+        kernel_names  = [basename(url) for url in download_URLs]
 
         # Check if the kernel has already been downloaded before, and if not, download it to a temporary directory.
         temp_dir = artifact_exists(meta_hash) ? nothing : mktempdir(first(Artifacts.artifacts_dirs()))
@@ -73,7 +73,7 @@ module SpiceUtils
                 (total, now) -> update!(bar, total > 0 ? round(Int, (now / total) * max_n) : 0)
             end
 
-            for (kernel, url) in zip(kernel_paths, download_URLs)
+            for (kernel, url) in zip(kernel_names, download_URLs)
                 try
                     Downloads.download(url, joinpath(temp_dir, kernel); progress=progress(kernel))
                 finally
@@ -86,7 +86,7 @@ module SpiceUtils
         end
 
         # Load each kernel into SPICE.
-        for (kernel, url) in zip(kernel_paths, download_URLs)
+        for (kernel, url) in zip(kernel_names, download_URLs)
             kernel_path = joinpath(kernel_dir, kernel)
             if !isfile(kernel_path)
                 error("Could not find kernel file '$(kernel)'. Delete the $(kernel_dir) directory and try again.")
