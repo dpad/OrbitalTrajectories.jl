@@ -2,6 +2,7 @@ using ModelingToolkit
 using Unitful
 using LinearAlgebra
 using ForwardDiff
+using SciMLBase
 
 # TODO: Check which of these are still in use and/or necessary.
 
@@ -15,7 +16,8 @@ Base.unsafe_convert(T::Type{<:Any}, x::ForwardDiff.Dual) = T(ForwardDiff.value.(
 # Compute norms for arrays of symbolic variables (as needed by EphemerisNBP)
 LinearAlgebra.norm(a::AbstractArray{<:ModelingToolkit.Num}) = sum(a .^ 2)^(1/2)
 
-
+# Add support for control variables being passed into uncertain initial conditions in DiffEqUncertainty
+SciMLBase.QuadratureProblem(f,lb,ub,args...;kwargs...) = QuadratureProblem{isinplace(f, 3)}(f,ForwardDiff.value.(lb),ForwardDiff.value.(ub),args...;kwargs...)
 
 
 # --------------------------------#
