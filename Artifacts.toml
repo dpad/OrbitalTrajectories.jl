@@ -12,7 +12,7 @@ lazy = true
 
     [[jupiter_kernels.download]]
     sha256 = ""
-    url = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/jup310.bsp"
+    url = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/jup365.bsp"
 
 [mars_kernels]
 git-tree-sha1 = "18cab005687dfb01d3ae8d8268c9e514e5484966"
