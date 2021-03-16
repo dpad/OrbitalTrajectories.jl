@@ -9,7 +9,7 @@ const all_kernels = Dict(
                   "lsk/latest_leapseconds.tls"],  # Required for all other kernels
     "default" => ["spk/planets/de430.bsp"],
     "mars"    => ["spk/satellites/mar097.bsp"],
-    "jupiter" => ["spk/satellites/jup310.bsp"],
+    "jupiter" => ["spk/satellites/jup365.bsp"],
     "saturn"  => ["spk/satellites/sat427.bsp"],
     "uranus"  => ["spk/satellites/ura111.bsp"],
     "neptune" => ["spk/satellites/nep095.bsp"],
