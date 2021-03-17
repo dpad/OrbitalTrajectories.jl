@@ -57,7 +57,6 @@ jobs:
           cache-name: cache-packages
         with:
           path: |
-            ~/.julia/packages
             ~/.julia/compiled
           key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('Project.toml', 'test/Project.toml') }}
 
