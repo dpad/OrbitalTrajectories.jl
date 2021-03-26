@@ -40,7 +40,7 @@ ModelingToolkit.parameters(state::State) = ModelingToolkit.parameters(state.mode
 # Interpolation
 (traj::Trajectory)(t::Number) = State(traj.model, traj.frame, traj.sol(t), (t, t))
 function (traj::Trajectory)(t::AbstractArray{<:Number})
-    new_sol = DiffEqBase.build_solution(traj.prob, traj.alg, t, traj.sol(t); retcode=traj.retcode)
+    new_sol = DiffEqBase.build_solution(traj.prob, traj.alg, t, traj.sol(t); interp=traj.interp, retcode=traj.retcode)
     return Trajectory(traj.model, traj.frame, new_sol)
 end
 
