@@ -39,6 +39,10 @@ ModelingToolkit.parameters(state::State) = ModelingToolkit.parameters(state.mode
 
 # Interpolation
 (traj::Trajectory)(t::Number) = State(traj.model, traj.frame, traj.sol(t), (t, t))
+function (traj::Trajectory)(t::AbstractArray{<:Number})
+    new_sol = DiffEqBase.build_solution(traj.prob, traj.alg, t, traj.sol(t); retcode=traj.retcode)
+    return Trajectory(traj.model, traj.frame, new_sol)
+end
 
 # Indexing
 Base.getindex(state::State, idx...) = getindex(state.prob.u0, idx...)
