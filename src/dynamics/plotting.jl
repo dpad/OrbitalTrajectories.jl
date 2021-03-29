@@ -107,6 +107,8 @@ end
 end
 
 @recipe function f(sol::Union{DiffEqBase.ODESolution{T}, OrdinaryDiffEq.ODECompositeSolution{T}}) where {T <: ForwardDiff.Dual}
+    # TODO: Fix the type dispatch on this, since it's doing piracy.
+
     trace_vars = get(plotattributes, :trace, false)
     trace_stability = get(plotattributes, :trace_stability, false)
     denseplot = get(plotattributes, :denseplot, true)

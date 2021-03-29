@@ -160,10 +160,10 @@ function check_distance(u, t, system::Abstract_R3BPModel, body::Symbol, distance
     return norm(@view(u[1:3]) - body_pos) - distance
 end
 
-function convert_to_frame(state::State{<:Abstract_R3BPModel,<:Abstract_ReferenceFrame}, frame::InertialFrame)
+function convert_to_frame(state::State{<:Abstract_R3BPModel,<:SynodicFrame}, frame::InertialFrame)
     to_inertial = state_to_inertial(state.tspan[1])
     converted_u0 = to_inertial * state.u0
-    new_state = State(state.model, InertialFrame(), converted_u0, state.tspan)
+    new_state = State(state.model, frame, converted_u0, state.tspan)
     return new_state
 end
 
