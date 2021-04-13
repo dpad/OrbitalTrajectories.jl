@@ -17,15 +17,12 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.WORKFLOW_TOKEN }}
       - id: version
         uses: zwaldowski/match-label-action@v2
         with:
           allowed: major,minor,patch
       - name: Bump the version
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COMPATHELPER_PRIV: ${{ secrets.ORBITALTRAJECTORIES_DEPLOY_SSH_KEY }}
         run: julia -e '
           using Pkg;
           proj_path = joinpath(pwd(), "Project.toml");
