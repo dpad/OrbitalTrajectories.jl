@@ -39,4 +39,5 @@ jobs:
       - uses: EndBug/add-and-commit@v7
         with:
           add: 'Project.toml'
-          message: 'Bump ${{ steps.bump.outputs.match}} version'
+          message: 'Bump ${{ steps.version.outputs.match}} version'
+          branch: master
