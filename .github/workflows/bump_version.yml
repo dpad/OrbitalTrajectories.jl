@@ -18,10 +18,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: zwaldowski/match-label-action@v2
         with:
-          allowed: >
-            major
-            minor
-            patch
+          allowed: major,minor,patch
       - name: Bump the version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
