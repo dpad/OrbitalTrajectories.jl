@@ -16,16 +16,4 @@ jobs:
         run: julia -e '
           using Pkg;
           using CompatHelper;
-          CompatHelper.main() do;
-            proj_path = joinpath(pwd(), "Project.toml");
-            proj_toml = Pkg.TOML.parsefile(proj_path);
-            open(proj_path; write=true) do file;
-              version = VersionNumber(proj_toml["version"]);
-              new_version = Base.nextpatch(version);
-              io = IOBuffer();
-              print(io, new_version);
-              proj_toml["version"] = String(take!(io));
-              Pkg.TOML.print(file, proj_toml; sorted = true, by = key -> (Pkg.Types.project_key_order(key), key));
-            end;
-            CompatHelper.update_manifests(); 
-          end;'
+          CompatHelper.main();'
