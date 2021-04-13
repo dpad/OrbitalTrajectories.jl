@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - master
+    types: [closed]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  bump:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: zwaldowski/match-label-action@v2
+        with:
+          allowed: >
+            major
+            minor
+            patch
+      - name: Bump the version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMPATHELPER_PRIV: ${{ secrets.ORBITALTRAJECTORIES_DEPLOY_SSH_KEY }}
+        run: julia -e '
+          using Pkg;
+          proj_path = joinpath(pwd(), "Project.toml");
+          proj_toml = Pkg.TOML.parsefile(proj_path);
+          open(proj_path; write=true) do file;
+            version = VersionNumber(proj_toml["version"]);
+            new_version = Base.next${{ steps.bump.outputs.match }}(version);
+            io = IOBuffer();
+            print(io, new_version);
+            proj_toml["version"] = String(take!(io));
+            Pkg.TOML.print(file, proj_toml; sorted = true, by = key -> (Pkg.Types.project_key_order(key), key));
+          end;'
+      - uses: EndBug/add-and-commit@v7
+        with:
+          add: 'Project.toml'
+          message: 'Bump ${{ steps.bump.outputs.match}} version'
