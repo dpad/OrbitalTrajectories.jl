@@ -16,7 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: zwaldowski/match-label-action@v2
+      - id: version
+        uses: zwaldowski/match-label-action@v2
         with:
           allowed: major,minor,patch
       - name: Bump the version
@@ -29,7 +30,7 @@ jobs:
           proj_toml = Pkg.TOML.parsefile(proj_path);
           open(proj_path; write=true) do file;
             version = VersionNumber(proj_toml["version"]);
-            new_version = Base.next${{ steps.bump.outputs.match }}(version);
+            new_version = Base.next${{ steps.version.outputs.match }}(version);
             io = IOBuffer();
             print(io, new_version);
             proj_toml["version"] = String(take!(io));
