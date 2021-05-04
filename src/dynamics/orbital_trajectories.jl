@@ -104,16 +104,19 @@ DiffEqBase.solve(state::State, args...; reltol=1e-10, abstol=1e-10, kwargs...) =
 DiffEqBase.__solve(state::State; kwargs...) = DiffEqBase.__solve(state, DEFAULT_ALG; kwargs...)
 
 # The __solve() method does the actual heavy lifting, including converting to a Trajectory.
-function DiffEqBase.__solve(state::State, alg::DiffEqBase.DEAlgorithm; userdata=Dict(), kwargs...)
+function DiffEqBase.__solve(state::State, alg::DiffEqBase.DEAlgorithm; userdata=Dict(), callback=nothing, kwargs...)
     default_frame = default_reference_frame(state.model)
     real_state = convert_to_frame(state, default_frame)
 
     # Pass the default state into the underlying solver
     # TODO: Remove the need for this in DiffCorrectAxisymmetric
-    userdata_new = deepcopy(userdata)
-    userdata_new[:real_state] = real_state
+    userdata = deepcopy(userdata)
+    userdata[:real_state] = real_state
+
+    # Copy the callbacks (for thread-safety)
+    callback = deepcopy(callback)
 
     # Call the underlying solver
-    raw_sol = solve(real_state.prob, alg; userdata=userdata_new, kwargs...)
+    raw_sol = solve(real_state.prob, alg; userdata, callback, kwargs...)
     return Trajectory(state.model, default_frame, raw_sol)
 end
