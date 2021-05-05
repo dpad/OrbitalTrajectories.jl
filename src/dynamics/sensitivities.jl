@@ -65,6 +65,15 @@ end
 end
 
 # TODO: Better functions for extracting STMs and stability index from Dual numbers
+function extract_STMs(sol::Trajectory, t)
+    extract_STMs(sol(t))
+end
+function extract_STMs(sol::Trajectory)
+    extract_STMs(sol.u)
+end
+function extract_STMs(state::State)
+    extract_STMs([state.u0])[1]
+end
 function extract_STMs(u)
     [hcat([Array(t.partials) for t in ut]...)' for ut in u]
 end
