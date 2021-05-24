@@ -1,6 +1,8 @@
 using Documenter
 using OrbitalTrajectories
 
+get!(ENV, "JULIA_DEBUG", Documenter)
+
 makedocs(
     sitename = "OrbitalTrajectories",
     format = Documenter.HTML(),

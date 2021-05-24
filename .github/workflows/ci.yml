@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         julia_version:
-          - '1.5.3'
+          - 1.6
         os:
           - ubuntu-latest
           # - windows-latest
@@ -59,7 +59,7 @@ jobs:
           path: |
             ~/.julia/packages
             ~/.julia/compiled
-          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('Project.toml', 'test/Project.toml') }}
+          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('Project.toml') }}
           restore-keys: |
             ${{ runner.os }}-test-${{ env.cache-name }}-
 
@@ -78,14 +78,12 @@ jobs:
           file: lcov.info
 
   docs:
-    needs: test
-
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         julia_version:
-          - '1.5.3'
+          - 1.6
         os:
           - ubuntu-latest
           # - windows-latest
@@ -122,7 +120,7 @@ jobs:
           path: |
             ~/.julia/packages
             ~/.julia/compiled
-          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('Project.toml', 'test/Project.toml') }}
+          key: ${{ runner.os }}-test-${{ env.cache-name }}-${{ hashFiles('test/Project.toml') }}
           restore-keys: |
             ${{ runner.os }}-test-${{ env.cache-name }}-
 
@@ -134,4 +132,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For authentication with GitHub Actions token
           GITHUB_REPOSITORY: ${{ env.GITHUB_REPOSITORY }}
-        run: julia --project=docs/ docs/make.jl
+        run: |
+          xvfb-run julia --color=yes --project=docs/ -e 'include("docs/make.jl")' 
