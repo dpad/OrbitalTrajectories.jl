@@ -31,10 +31,17 @@ end
 
 # TODO: Move hand-coded functions into :analytical of CR3BP
 CR3BP(args...; kwargs...) = CR3BP{Val{false}}(R3BPSystemProperties(args...; kwargs...))
-function CR3BP{nothandcoded}(props::R3BPSystemProperties) where {nothandcoded<:Val{false}} 
-    ode = CR3BP_ODEFunctions
+function CR3BP{nothandcoded}(props::R3BPSystemProperties; kwargs...) where {nothandcoded<:Val{false}} 
+    if length(kwargs) == 0
+        ode = CR3BP_ODEFunctions
+    else
+        ode = _CR3BP_ODEFunctions(; kwargs...)
+    end
     CR3BP{false, typeof(ode), typeof(props)}(ode, props)
 end
+
+# XXX: The parameters overload below gives us a performance boost.
+ModelingToolkit.parameters(model::CR3BP{false}) = SVector(model.props.μ)
 
 # Hand-coded CR3BP
 HandcodedCR3BP(args...; kwargs...) = CR3BP{Val{true}}(R3BPSystemProperties(args...; kwargs...))
@@ -42,7 +49,7 @@ function CR3BP{handcoded}(props::R3BPSystemProperties) where {handcoded<:Val{tru
     ode = _CR3BP_ODEFunctions(nothing, handcodedCR3BP, handcodedCR3BP_withSTM)
     CR3BP{true, typeof(ode), typeof(props)}(ode, props)
 end
-ModelingToolkit.parameters(model::CR3BP{true}) = [model.props.μ]
+ModelingToolkit.parameters(model::CR3BP{true}) = SVector(model.props.μ)
 
 #---------#
 # METHODS #
