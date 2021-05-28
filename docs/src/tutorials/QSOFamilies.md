@@ -49,7 +49,7 @@ of many similar orbits along the axis.
     orbits like DROs/QSOs, perturbing only along the initial ``x`` position.
 
 ```@example 1
-trajectories = continuation_simple(state; x_perturbation=3e-4, dc_tolerance=1e-4)
+trajectories = continuation_simple(state; x_perturbation=3e-4, dc_tolerance=1e-4, verbose=false)
 length(trajectories)
 ```
 
