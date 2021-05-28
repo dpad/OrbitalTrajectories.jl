@@ -1,7 +1,8 @@
 using Documenter
 using OrbitalTrajectories
 
-get!(ENV, "JULIA_DEBUG", Documenter)
+get!(ENV, "JULIA_DEBUG", Documenter)  # Print @debug notices from Documenter
+get!(ENV, "GKSwstype", "100")  # Avoid Plots GR issues (see Documenter.jl#1583)
 
 makedocs(
     sitename = "OrbitalTrajectories",
