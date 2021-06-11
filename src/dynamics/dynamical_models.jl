@@ -74,7 +74,8 @@ end
 Base.show(io::IO, x::Abstract_DynamicalModel) = show(io, typeof(x))
 Base.show(io::IO, x::Type{<:Abstract_DynamicalModel}) = print(io, nameof(x))
 ModelingToolkit.varmap_to_vars(model::Abstract_DynamicalModel, varmap) = ModelingToolkit.varmap_to_vars(varmap, parameters(model))
-DiffEqBase.isinplace(f::Abstract_DynamicalModel, _) = true
+DiffEqBase.isinplace(f::Abstract_DynamicalModel) = true
+DiffEqBase.isinplace(f::Abstract_DynamicalModel, _) = isinplace(f)
 
 # XXX: Need these due to new ModelingToolkit interface.
 function Base.getproperty(sys::Abstract_ModelODEFunctions, name::Symbol)

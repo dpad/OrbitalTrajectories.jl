@@ -6,7 +6,7 @@ export collision, check_distance, crashed
 # ORBITAL PROBLEMS #
 #------------------#
 
-struct State{M<:Abstract_DynamicalModel,F<:Abstract_ReferenceFrame,O<:DiffEqBase.DEProblem} <: DiffEqBase.DEProblem
+struct State{M<:Abstract_DynamicalModel,F<:Abstract_ReferenceFrame,uType,tType,isinplace,O<:SciMLBase.AbstractODEProblem{uType,tType,isinplace}} <: SciMLBase.AbstractODEProblem{uType,tType,isinplace}
     model :: M
     frame :: F  # Reference frame that the problem's u0 is defined in
     prob :: O
@@ -15,7 +15,7 @@ State(model::Abstract_DynamicalModel, reference_frame::Abstract_ReferenceFrame, 
     State(model, reference_frame, MArray{Tuple{size(u0)...}}(u0), tspan)
 State(model::Abstract_DynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::StaticArray, tspan) =
     State(model, reference_frame, ODEProblem(model, u0, tspan, parameters(model)))
-State(model, u0, tspan) = State(model, default_reference_frame(model), u0, tspan)
+State(model::Abstract_DynamicalModel, u0::AbstractArray, tspan) = State(model, default_reference_frame(model), u0, tspan)
 
 struct Trajectory{M<:Abstract_DynamicalModel,F<:Abstract_ReferenceFrame,T,N,A,O<:DiffEqBase.AbstractTimeseriesSolution{T,N,A},} <: DiffEqBase.AbstractTimeseriesSolution{T,N,A}
     model :: M
@@ -104,7 +104,7 @@ DiffEqBase.solve(state::State, args...; reltol=1e-10, abstol=1e-10, kwargs...) =
 DiffEqBase.__solve(state::State; kwargs...) = DiffEqBase.__solve(state, DEFAULT_ALG; kwargs...)
 
 # The __solve() method does the actual heavy lifting, including converting to a Trajectory.
-function DiffEqBase.__solve(state::State, alg::DiffEqBase.DEAlgorithm; userdata=Dict(), callback=nothing, kwargs...)
+function DiffEqBase.__solve(state::State, alg::OrdinaryDiffEqAlgorithm; userdata=Dict(), callback=nothing, kwargs...)
     default_frame = default_reference_frame(state.model)
     real_state = convert_to_frame(state, default_frame)
 
