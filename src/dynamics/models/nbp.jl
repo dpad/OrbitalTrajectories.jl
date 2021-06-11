@@ -89,7 +89,7 @@ function EphemerisNBP(bodies::Vararg{Symbol}; center=nothing, kwargs...)
 end
 
 Base.show(io::IO, x::EphemerisNBP) = print(io, "$(nameof(typeof(x)))$(x.props)")
-ModelingToolkit.parameters(model::EphemerisNBP) = []
+ModelingToolkit.parameters(model::EphemerisNBP) = SVector{0,Float64}()
 
 # HELPERS
 

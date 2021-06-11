@@ -1,6 +1,6 @@
 export continuation_simple
 
-function continuation_simple(state::State; x_perturbation=1e-2, ops=(:zero, :+, :-), dc_tolerance=1e-3, kwargs...)
+function continuation_simple(state::State; x_perturbation=1e-2, ops=(:zero, :+, :-), dc_tolerance=1e-3, verbose=true, kwargs...)
     # NOTE: Only designed for DiffCorrectAxisymmetric!
     corrector = DiffCorrectAxisymmetric()
 
@@ -19,11 +19,10 @@ function continuation_simple(state::State; x_perturbation=1e-2, ops=(:zero, :+, 
     new_sols::Array{Trajectory} = []
 
     # Threads.@threads for id in ops
-    p = ProgressThresh(0., "Continuing orbits:")
     try
         for id in ops
             op = getfield(Base, id)
-            p = ProgressThresh(id == :+ ? max_x : min_x, "Continuing orbits along $(op):")
+            p = ProgressThresh(id == :+ ? max_x : min_x; desc="Continuing orbits along $(op):", enabled=verbose)
             last_state = orig_state
             while true
                 # Build a new solution by perturbing the last solution

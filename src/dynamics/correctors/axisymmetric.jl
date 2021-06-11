@@ -51,7 +51,7 @@ end
 
 crossed(sol::Trajectory) = sol.retcode == :NCrossings
 
-function corrector_callback(::Abstract_AxisymmetricCorrector, system::EphemerisNBP)
+function corrector_callback(::Abstract_AxisymmetricCorrector, system::EphemerisNBP; interp_points=10)
     # TODO: Play with interp_points, interp_points=0 halves runtime/memory, but might cause issues due to oscillation around y-axis
     # TODO: idxs=[2] makes things very slow, even though it seems it should speed it up.
     return VectorContinuousCallback(
@@ -62,7 +62,7 @@ function corrector_callback(::Abstract_AxisymmetricCorrector, system::EphemerisN
                 terminate!(integrator, :Crashed)
             end
         end, 3;
-        interp_points=10, save_positions=(false, false)) do du, u, t, integrator
+        interp_points, save_positions=(false, false)) do du, u, t, integrator
             diam1 = maximum(bodvrd(String(primary_body(system)), "RADII"))  # km
             diam2 = maximum(bodvrd(String(secondary_body(system)), "RADII"))  # km
             du[1] = check_distance(u, t, system, primary_body(system), diam1)
@@ -79,14 +79,14 @@ function corrector_callback(::Abstract_AxisymmetricCorrector, system::EphemerisN
         end
 end
 
-function corrector_callback(::Abstract_AxisymmetricCorrector, ::Abstract_DynamicalModel)
+function corrector_callback(::Abstract_AxisymmetricCorrector, ::Abstract_DynamicalModel; interp_points=10)
     # TODO: Play with interp_points, interp_points=0 halves runtime/memory, but might cause issues due to oscillation around y-axis
     # TODO: idxs=[2] makes things very slow, even though it seems it should speed it up.
-    return ContinuousCallback(orbit_xcrossing, terminate_after_N_crossings!; interp_points=10, save_positions=(false, false))
+    return ContinuousCallback(orbit_xcrossing, terminate_after_N_crossings!; interp_points, save_positions=(false, false))
 end
 
-function corrector_solve(corrector::Abstract_AxisymmetricCorrector, state::State; strict=false, verbose=false, crossings=1, kwargs...)
-    callback = strict ? corrector_callback(corrector, state.model) : nothing
+function corrector_solve(corrector::Abstract_AxisymmetricCorrector, state::State; interp_points=2, strict=false, verbose=false, crossings=1, kwargs...)
+    callback = strict ? corrector_callback(corrector, state.model; interp_points) : nothing
     userdata = Dict{Symbol,Any}(:crossings => crossings)  # XXX: Dict type specified for easy merging
 
     sol = sensitivity_trace(AD, state, corrector.frame, corrector.alg; trace_time=true, abstol=1e-12, reltol=1e-12, callback, userdata, kwargs...)

@@ -64,6 +64,21 @@ end
     return convert_to_frame(traj_vareqns_unconverted, desired_frame)
 end
 
+@doc """ Sensitivity of the state at time t with respect to initial state. """
+function sensitivity(sol::Trajectory, t)
+    extract_STMs(sol, t)
+end
+
+@doc """ Sensitivity of the state at time t2 with respect to the state at time t1 <= t2. """
+function sensitivity(sol::Trajectory, t1, t2)
+    @assert t1 <= t2  "Expected t1 <= t2"
+    if t2 == t1
+        return Matrix(1.0 * I, 6, 6)  # TODO: Make this type and size-generic
+    else
+        return sensitivity(sol, t2) / sensitivity(sol, t1)
+    end
+end
+
 # TODO: Better functions for extracting STMs and stability index from Dual numbers
 function extract_STMs(sol::Trajectory, t)
     extract_STMs(sol(t))
