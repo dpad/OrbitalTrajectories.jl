@@ -80,6 +80,7 @@ function sensitivity(sol::Trajectory, t1, t2)
 end
 
 # TODO: Better functions for extracting STMs and stability index from Dual numbers
+# TODO: Use ForwardDiff.extract_jacobian
 function extract_STMs(sol::Trajectory, t)
     extract_STMs(sol(t))
 end
