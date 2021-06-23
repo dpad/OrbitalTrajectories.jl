@@ -16,4 +16,4 @@ jobs:
         run: julia -e '
           using Pkg;
           using CompatHelper;
-          CompatHelper.main();'
+          CompatHelper.main(keep_existing_compat=false, drop_existing_compat=true);'
