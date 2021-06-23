@@ -87,7 +87,7 @@ end
 
         # Plot the trajectory
         vars --> (1, 2)  # (x, y)
-        denseplot --> true
+        denseplot --> get(plotattributes, :denseplot, true)
 
         xlim, ylim = get_margin_lims(sol, plotattributes)
         xlims --> xlim
