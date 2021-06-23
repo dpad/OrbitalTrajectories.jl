@@ -35,13 +35,14 @@ end
     data = merge(data, kwargs)
 
     # Run-time compute remaining values
-    μ = get(data, :μ, SpiceUtils.mass_fraction(a, b))
+    e = Float64(data[:e])
+    μ = Float64(get(data, :μ, SpiceUtils.mass_fraction(a, b)))
     R1 = get(data, :R1, SVector{3}(bodvrd(String(a), "RADII")u"km"))
     R2 = get(data, :R2, SVector{3}(bodvrd(String(b), "RADII")u"km"))
     # Ensure the Length attribute matches the Radius type
     L = convert(eltype(R1), data[:L])
 
-    R3BPSystemProperties(a, b, μ, L, data[:V], data[:T], data[:e], R1, R2)
+    R3BPSystemProperties(a, b, μ, L, data[:V], data[:T], e, R1, R2)
 end
 R3BPSystemProperties(system::Abstract_DynamicalModel) = R3BPSystemProperties(primary_body(system), secondary_body(system))
 
