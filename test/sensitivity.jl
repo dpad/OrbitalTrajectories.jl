@@ -65,5 +65,5 @@ end
 
     # Compute STM trace
     STM_AD_trace = sensitivity_trace(AD, prob)
-    @test extract_STMs([STM_AD_trace.sol[end]])[1] ≈ STM_AD rtol=1e-5
+    @test sensitivity(STM_AD_trace, STM_AD_trace.t[end]) ≈ STM_AD rtol=1e-5
 end

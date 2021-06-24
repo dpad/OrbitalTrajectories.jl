@@ -1,4 +1,4 @@
-export AD, FD, VE, sensitivity, sensitivity_trace, extract_STMs, extract_stability, has_variational_equations
+export AD, FD, VE, sensitivity, sensitivity_trace, stability_index, has_variational_equations
 
 #---------------------------#
 # SENSITIVITIES (i.e. STMs) #
@@ -80,19 +80,16 @@ function sensitivity(sol::Trajectory, t1, t2)
 end
 
 # TODO: Better functions for extracting STMs and stability index from Dual numbers
-# TODO: Use ForwardDiff.extract_jacobian
 function extract_STMs(sol::Trajectory, t)
     extract_STMs(sol(t))
 end
 function extract_STMs(sol::Trajectory)
-    extract_STMs(sol.u)
+    SVector{length(sol.t)}([extract_STMs(sol[i]) for i in 1:length(sol.t)])
 end
 function extract_STMs(state::State)
-    extract_STMs([state.u0])[1]
+    T = eltype(state.u0).parameters[1]  # Get the tag type
+    ForwardDiff.extract_jacobian(T, state.u0, values.(state.u0))
 end
-function extract_STMs(u)
-    [hcat([Array(t.partials) for t in ut]...)' for ut in u]
-end
-function extract_stability(u)
-    hcat(eigvals.(extract_STMs(u))...)
+function stability_index(sol::Union{Trajectory,State})
+    hcat(eigvals.(extract_STMs(sol))...)
 end

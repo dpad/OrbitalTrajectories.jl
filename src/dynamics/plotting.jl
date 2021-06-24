@@ -106,9 +106,7 @@ end
     sol.sol
 end
 
-@recipe function f(sol::Union{DiffEqBase.ODESolution{T}, OrdinaryDiffEq.ODECompositeSolution{T}}) where {T <: ForwardDiff.Dual}
-    # TODO: Fix the type dispatch on this, since it's doing piracy.
-
+@recipe function f(sol::Trajectory{<:Abstract_DynamicalModel,<:Abstract_ReferenceFrame,T}) where {T <: ForwardDiff.Dual}
     trace_vars = get(plotattributes, :trace, false)
     trace_stability = get(plotattributes, :trace_stability, false)
     denseplot = get(plotattributes, :denseplot, true)
@@ -116,17 +114,17 @@ end
 
     tspan = ForwardDiff.value.(denseplot ? range(sol.t[begin], sol.t[end], length=plotdensity) : sol.t)
     tspan_norm = @. (tspan - tspan[begin]) / (tspan[end] - tspan[begin])
-    u_vals = sol.(tspan)
+    sol_interpolated = sol(tspan)
 
     if trace_vars
-        STMs = hcat([reshape(v, length(v)) for v in extract_STMs(u_vals)]...)'
+        STMs = sensitivity(sol_interpolated)
         @series begin
             label --> ""
             legend --> false
             tspan_norm, STMs
         end
     elseif trace_stability
-        stability_indices = norm.(extract_stability(u_vals))'
+        stability_indices = norm.(stability_index(sol_interpolated))'
         sorted_indices = hcat(map(sort, eachslice(stability_indices, dims=1))...)[4:6,:]'
         max_eigenvalues = map(maximum, eachslice(sorted_indices, dims=1))
         @series begin
