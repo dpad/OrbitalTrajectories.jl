@@ -6,40 +6,38 @@ import ..cse
 
 # wrap_code: perform common substring elimination to improve performance of the resulting models.
 @doc """Generic constructor for a DynamicalModel's underlying ODEFunctions."""
-function (T::Type{<:Abstract_ModelODEFunctions})(args...; wrap_code=(cse, cse), sparse=true, kwargs...)
+function (T::Type{<:Abstract_ModelODEFunctions})(args...; wrap_code=(cse, cse), kwargs...)
     _ode = ODESystem(T, args...; kwargs...)
 
     # Reduce high-order system to 1st-order (re-ordering to keep the original equations first)
     # NOTE: need to expand the RHS derivatives before calling order-lowering
-    # TODO: use ode_order_lowering(::ODESystem) when it's not broken on diff2term
     eqs = expand_derivatives.(equations(_ode))
     num_orig_eqs = length(eqs)
-    eqs, _ = simplify.(ode_order_lowering(eqs, independent_variable(_ode), states(_ode)))
+    eqs, dvs = ode_order_lowering(eqs, independent_variable(_ode), ModelingToolkit.states(_ode)) 
     eqs = [eqs[end - num_orig_eqs + 1:end]..., eqs[1:num_orig_eqs]...]
-    @named ode = ODESystem(eqs)
-
-    # Create the STM for the system
-    ode_stm = STM_ODESystem(ode; sparse)
-
-    # Compose the full system including STM
-    stm_system = ODESystem([], independent_variable(_ode); systems=[ode, ode_stm])
+    dvs = [dvs[end - num_orig_eqs + 1:end]..., dvs[1:num_orig_eqs]...]
+    ode = ODESystem(simplify.(eqs), independent_variable(_ode), dvs, parameters(_ode))
 
     # Generate the functions
     # TODO: Add support for tgrad (need to define derivative(get_pos) for EphemerisNBP)
-    ode_f = ODEFunction(ode; jac=true, tgrad=false, eval_expression=false, eval_module=@__MODULE__, sparse, wrap_code)
-    ode_stm_f = ODEFunction(stm_system; tgrad=false, eval_expression=false, eval_module=@__MODULE__, sparse, wrap_code)
-
+    ode_f = ODEFunction(ode; jac=true, tgrad=false, eval_expression=false, eval_module=@__MODULE__, wrap_code)
+    ode_stm_f = STM_ODEFunction(ode, ode_f; wrap_code)
     T(ode, ode_f, ode_stm_f)
 end
 
 @doc """Generic model function."""
 (model::Abstract_DynamicalModel)(args...; kwargs...) = model.ode.ode_f(args...; kwargs...)
 
+@traitdef HasJacobian{X}
+@traitimpl HasJacobian{X} <- has_jacobian(X)
+has_jacobian(X::Type{<:DiffEqBase.ODEFunction}) = !isnothing(fieldtype(X, :jac))
+
 @doc """
     Function to generate an ODE Function that computes the State Transition
-    Matrix simultaneously with the given system.
+    Matrix simultaneously with the given function f. This requires f to have
+    a computable Jacobian function.
 """
-function STM_ODESystem(ode::ModelingToolkit.AbstractODESystem; sparse=true)
+@traitfn function STM_ODEFunction(ode::ModelingToolkit.AbstractODESystem, f::::HasJacobian; kwargs...)
     # TODO: Output just the variational equations, join as a SplitODEProblem
     # TODO: Memoize this function! It's very slightly slow for EphemerisNBP
 
@@ -54,19 +52,20 @@ function STM_ODESystem(ode::ModelingToolkit.AbstractODESystem; sparse=true)
     D = Differential(iv)
 
     # Get the Jacobian matrix (A(t))
-    A = calculate_jacobian(ode; sparse)
+    A = Base.invokelatest(f.jac, Num.(dvs), Num.(params), Num(iv))
 
     # The State Transition Matrix (STM) ODE function is defined as follows, including the N^2 Jacobian equations +
     # the N first-order equations of motion. [Koon 2011]
     # NOTE: the Differential is defined element-wise and flattened to a list.
-    ϕ = Symbolics.scalarize(ϕ)
-    stm_eqs = D.(ϕ) .~ A * ϕ
+    stm_eqs = simplify.(D.(ϕ) .~ A * ϕ)
 
     # Create the ODE system and generate its functions
-    @named stm_ode = ODESystem(vec(stm_eqs), iv, vec(ϕ), params;
-        # The default STM starts with a simple identity matrix.
-        defaults=Dict(collect(ϕ .=> 1 * I(length(dvs))))
-    )
+    stm_ode = ODESystem(
+        [equations(ode)..., stm_eqs...], # Append the ODE equations.
+        iv,
+        [dvs..., ϕ...],  # Append the STM and motion state variables
+        params)
+    stm_f = ODEFunction(stm_ode; sparse=true, eval_expression=false, eval_module=@__MODULE__, kwargs...)
 end
 
 #---------#
