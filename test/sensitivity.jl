@@ -38,9 +38,9 @@ using LinearAlgebra
         state_cr3bp_handcoded = State(cr3bp_handcoded, SynodicFrame(), u0, (0., case.t_p))
 
         # Compute STMs
-        STM_AD = sensitivity(AD, state_cr3bp)
-        STM_VE = sensitivity(VE, state_cr3bp)
-        STM_VE_handcoded = sensitivity(VE, state_cr3bp_handcoded)
+        STM_AD = get_sensitivity(AD, state_cr3bp)
+        STM_VE = get_sensitivity(VE, state_cr3bp)
+        STM_VE_handcoded = get_sensitivity(VE, state_cr3bp_handcoded)
 
         # Compute the maximum eigenvalues
         λ_max_AD = maximum(norm.(eigvals(Matrix(STM_AD))))
@@ -59,11 +59,11 @@ end
     prob = State(system_nbp, SynodicFrame(), u0, (0., 3600.0*24))
 
     # Compute final STM
-    STM_AD = sensitivity(AD, prob)
-    STM_FD = sensitivity(FD, prob)
+    STM_AD = get_sensitivity(AD, prob)
+    STM_FD = get_sensitivity(FD, prob)
     @test STM_AD ≈ STM_FD rtol=1e-5
 
     # Compute STM trace
-    STM_AD_trace = sensitivity_trace(AD, prob)
-    @test sensitivity(STM_AD_trace, STM_AD_trace.t[end]) ≈ STM_AD rtol=1e-5
+    STM_AD_trace = solve_sensitivity(AD, prob)
+    @test get_sensitivity(STM_AD_trace, STM_AD_trace.t[end]) ≈ STM_AD rtol=1e-5
 end

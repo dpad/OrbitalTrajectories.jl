@@ -1,4 +1,4 @@
-export AD, FD, VE, sensitivity, sensitivity_trace, stability_index, has_variational_equations
+export AD, FD, VE, solve_sensitivity, get_sensitivity, stability_index, has_variational_equations
 
 #---------------------------#
 # SENSITIVITIES (i.e. STMs) #
@@ -15,29 +15,9 @@ has_variational_equations(X::Type{<:Abstract_ModelODEFunctions}) = hasfield(X, :
 has_variational_equations(X::Type{<:Abstract_DynamicalModel}) = has_variational_equations(fieldtype(X, :ode))
 has_variational_equations(X::Type{<:State}) = has_variational_equations(fieldtype(X, :model))
 
-@doc """ Sensitivity of the final state with respect to initial state. """
-sensitivity(m::Module, args...; kwargs...) = sensitivity(Val(first(fullname(m))), args...; kwargs...)
-function sensitivity(::Val{:ForwardDiff}, state, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...)
-    ForwardDiff.jacobian(state.u0) do u0
-        new_state = remake(state, u0=u0)
-        return convert_to_frame(solve(new_state, alg; kwargs...), desired_frame).sol[end]
-    end
-end
-function sensitivity(::Val{:FiniteDiff}, state, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...)
-    FiniteDiff.finite_difference_jacobian(state.u0) do u0
-        new_state = remake(state, u0=u0)
-        return convert_to_frame(solve(new_state, alg; kwargs...), desired_frame).sol[end]
-    end
-end
-function sensitivity(v::Val{:VariationalEquations}, state, args...; kwargs...)
-    STM_VE = sensitivity_trace(v, state, args...; kwargs...).sol[end]
-    dim = length(state.u0)
-    return reshape(STM_VE[dim+1:end], (dim, dim))
-end
-
-@doc """ Sensitivity of the full propagated trajectory with respect to initial state. """
-sensitivity_trace(m::Module, args...; kwargs...) = sensitivity_trace(Val(first(fullname(m))), args...; kwargs...)
-function sensitivity_trace(::Val{:ForwardDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; trace_time=false, kwargs...)
+@doc """ Return the fully propagated trajectory including state sensitivities with respect to the initial state. """
+solve_sensitivity(m::Module, args...; kwargs...) = solve_sensitivity(Val(first(fullname(m))), args...; kwargs...)
+function solve_sensitivity(::Val{:ForwardDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; trace_time=false, kwargs...)
     values = trace_time ? [state.u0..., state.tspan[end] - state.tspan[begin]] : state.u0
 
     # Seed the values we want to trace with Dual numbers
@@ -53,7 +33,7 @@ function sensitivity_trace(::Val{:ForwardDiff}, state::State, desired_frame=stat
     sol = solve(state_AD, alg; kwargs...)
     return convert_to_frame(sol, desired_frame)
 end
-@traitfn function sensitivity_trace(::Val{:VariationalEquations}, state::S, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...) where {S; HasVE{S}}
+@traitfn function solve_sensitivity(::Val{:VariationalEquations}, state::S, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...) where {S; HasVE{S}}
     dim = length(state.u0)
     I_flat = reshape(Matrix{Float64}(I, dim, dim), dim^2)
     u0_STM = MVector{dim^2 + dim}(vcat(state.u0, I_flat))
@@ -64,18 +44,36 @@ end
     return convert_to_frame(traj_vareqns_unconverted, desired_frame)
 end
 
+@doc """ Solve and return the sensitivity of the final state (at t=state.tspan[2]) with respect to the given state. """
+get_sensitivity(m::Module, args...; kwargs...) = get_sensitivity(Val(first(fullname(m))), args...; kwargs...)
+function get_sensitivity(m::Val, state::State, args...; kwargs...)
+    sol = solve_sensitivity(m, state, args...; kwargs...)
+    get_sensitivity(sol, sol.t[end])
+end
+function get_sensitivity(::Val{:FiniteDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...)
+    FiniteDiff.finite_difference_jacobian(state.u0) do u0
+        new_state = remake(state, u0=u0)
+        return convert_to_frame(solve(new_state, alg; kwargs...), desired_frame).sol[end]
+    end
+end
+
 @doc """ Sensitivity of the state at time t with respect to initial state. """
-function sensitivity(sol::Trajectory, t)
+function get_sensitivity(sol::Trajectory, t)
     extract_STMs(sol, t)
 end
 
+@doc """ Sensitivity trace of each state (at times t=sol.t) with respect to initial state. """
+function get_sensitivity(sol::Trajectory)
+    extract_STMs(sol)
+end
+
 @doc """ Sensitivity of the state at time t2 with respect to the state at time t1 <= t2. """
-function sensitivity(sol::Trajectory, t1, t2)
+function get_sensitivity(sol::Trajectory, t1, t2)
     @assert t1 <= t2  "Expected t1 <= t2"
     if t2 == t1
-        return Matrix(1.0 * I, 6, 6)  # TODO: Make this type and size-generic
+        return Matrix(1.0 * I, 6, 6)  # TODO: Make this type and size-generic, static
     else
-        return sensitivity(sol, t2) / sensitivity(sol, t1)
+        return get_sensitivity(sol, t2) / get_sensitivity(sol, t1)
     end
 end
 

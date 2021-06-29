@@ -62,7 +62,7 @@ selected_trajectories = trajectories[1:10:end]
 
 # Compute stability index for each orbit
 stability_index = map(selected_trajectories) do traj
-    STM = Matrix(sensitivity(AD, State(traj)))
+    STM = Matrix(get_sensitivity(AD, State(traj)))
     eigenvalues = norm.(eigvals(STM))
     return maximum(eigenvalues)
 end

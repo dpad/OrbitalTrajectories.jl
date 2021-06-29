@@ -117,7 +117,7 @@ end
     sol_interpolated = sol(tspan)
 
     if trace_vars
-        STMs = sensitivity(sol_interpolated)
+        STMs = get_sensitivity(sol_interpolated)
         @series begin
             label --> ""
             legend --> false
