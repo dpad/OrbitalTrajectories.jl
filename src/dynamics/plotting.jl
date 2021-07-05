@@ -134,7 +134,7 @@ end
         end
     else
         vars = get(plotattributes, :vars, (1,2))
-        ([[u[v].value for u in u_vals] for v in vars]...,)
+        ([[u[v].value for u in sol_interpolated.u] for v in vars]...,)
     end
 end
 
@@ -178,14 +178,16 @@ end
                         b = circ_props.R2[vars[2]] / circ_props.L)
     end
 
-    @series begin
-        seriestype := :hline
-        seriescolor := :black
-        linestyle := :dash
-        linewidth := 0.75
-        line_z := nothing
-        label := ""
-        [0]
+    if get(plotattributes, :origin_primary, true)
+        @series begin
+            seriestype := :hline
+            seriescolor := :black
+            linestyle := :dash
+            linewidth := 0.75
+            line_z := nothing
+            label := ""
+            [0]
+        end
     end
 
     if get(plotattributes, :origin_secondary, true)
