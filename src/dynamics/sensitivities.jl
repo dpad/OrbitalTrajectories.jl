@@ -1,4 +1,5 @@
-export AD, FD, VE, solve_sensitivity, get_sensitivity, stability_index, has_variational_equations
+export AD, FD, VE, solve_sensitivity, stability_index, has_variational_equations
+export StateTransitionMatrix, StateTransitionTensor, STM#, STT
 
 #---------------------------#
 # SENSITIVITIES (i.e. STMs) #
@@ -17,12 +18,15 @@ has_variational_equations(X::Type{<:State}) = has_variational_equations(fieldtyp
 
 @doc """ Return the fully propagated trajectory including state sensitivities with respect to the initial state. """
 solve_sensitivity(m::Module, args...; kwargs...) = solve_sensitivity(Val(first(fullname(m))), args...; kwargs...)
-function solve_sensitivity(::Val{:ForwardDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; trace_time=false, kwargs...)
+function solve_sensitivity(::Val{:ForwardDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; order=1, trace_time=false, kwargs...)
     values = trace_time ? [state.u0..., state.tspan[end] - state.tspan[begin]] : state.u0
 
     # Seed the values we want to trace with Dual numbers
     tag = typeof(state.model)
-    duals = DiffEqSensitivity.seed_duals(values, tag)
+    duals = copy(values)
+    for _ in 1:order
+        duals = DiffEqSensitivity.seed_duals(duals, tag)
+    end
     u0 = MVector{length(state.u0)}(duals[1:length(state.u0)])
 
     # Remake the state with the seeded values
@@ -44,50 +48,94 @@ end
     return convert_to_frame(traj_vareqns_unconverted, desired_frame)
 end
 
-@doc """ Solve and return the sensitivity of the final state (at t=state.tspan[2]) with respect to the given state. """
-get_sensitivity(m::Module, args...; kwargs...) = get_sensitivity(Val(first(fullname(m))), args...; kwargs...)
-function get_sensitivity(m::Val, state::State, args...; kwargs...)
-    sol = solve_sensitivity(m, state, args...; kwargs...)
-    get_sensitivity(sol, sol.t[end])
+function stability_index(sol::Union{Trajectory,State})
+    hcat(eigvals.(extract_STMs(sol))...)
 end
-function get_sensitivity(::Val{:FiniteDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...)
+
+
+# State Transition Tensors
+struct StateTransitionTensor{N,V<:AbstractArray}
+    vals::V
+
+    # Constructor
+    function StateTransitionTensor(vals, order=get_order(eltype(vals)))
+        real_order = get_order(eltype(vals))
+        order > 0 || throw("Expected order > 0, got $(order).")
+        order <= real_order || throw("Values in given STT only support order <= $(real_order), got $(order).")
+        return new{order, typeof(vals)}(vals)
+    end
+end
+# const STT = StateTransitionTensor
+
+# Properties
+Base.axes(stm::StateTransitionMatrix) = (Base.OneTo(length(stm.vals)), Base.OneTo(length(stm.vals)))
+Base.axes(stm::StateTransitionMatrix, d) = axes(stm)[d]
+
+function Base.getindex(stm::StateTransitionMatrix, idx...)
+    T = eltype(stm.vals).parameters[1]  # Get the tag type
+    STM = ForwardDiff.extract_jacobian(T, stm.vals, values.(dx))
+
+    result = similar(ydual, valtype(eltype(ydual)), length(ydual), length(x))
+    return ForwardDiff.extract_jacobian!(T, result, ydual, length(x))[idx...]
+
+end
+
+Base.show(io::IO, x::StateTransitionTensor{N,V}) where {N,V} = print(io, "STT{$(nameof(eltype(V))), order=$(N)}$(recursive_value.(x.vals))")
+Base.show(io::IO, x::StateTransitionMatrix{V}) where {V} = print(io, "STM{$(nameof(eltype(V)))}$(recursive_value.(x.vals))")
+
+function (Base.:+)(stm::StateTransitionMatrix, dx::AbstractArray{<:Number})
+#     T = eltype(state.u0).parameters[1]  # Get the tag type
+    # STM = ForwardDiff.extract_jacobian(T, stm.vals, values.(dx))
+    @info "mult!"
+end
+
+# Copy constructor
+StateTransitionTensor(other::STT, new_order=N) where {N,STT<:StateTransitionTensor{N}} = StateTransitionTensor(other.vals, new_order)
+
+# State Transition Matrix
+const StateTransitionMatrix{V} = StateTransitionTensor{1, V}
+const STM = StateTransitionMatrix
+StateTransitionMatrix(other::StateTransitionTensor) = StateTransitionTensor(other, 1)
+StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwargs...)
+
+@doc """ Extracts the State Transition Tensor from the state (solved with solve_sensitivity). """
+StateTransitionTensor(state::State) = StateTransitionTensor(state.u0)
+
+@doc """ Solve and return the sensitivity of the final state (at t=state.tspan[2]) with respect to the given state. """
+StateTransitionTensor(m::Module, args...; kwargs...) = StateTransitionTensor(Val(first(fullname(m))), args...; kwargs...)
+function StateTransitionTensor(m::Val, state::State, args...; kwargs...)
+    sol = solve_sensitivity(m, state, args...; kwargs...)
+    StateTransitionTensor(sol, sol.t[end])
+end
+function StateTransitionMatrix(::Val{:FiniteDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...)
     FiniteDiff.finite_difference_jacobian(state.u0) do u0
         new_state = remake(state, u0=u0)
         return convert_to_frame(solve(new_state, alg; kwargs...), desired_frame).sol[end]
     end
 end
 
-@doc """ Sensitivity of the state at time t with respect to initial state. """
-function get_sensitivity(sol::Trajectory, t)
-    extract_STMs(sol, t)
+@doc """ Sensitivity of the interpolated states (at times t) with respect to initial state. """
+function StateTransitionTensor(sol::Trajectory, t)
+    StateTransitionTensor(sol(t))
 end
 
 @doc """ Sensitivity trace of each state (at times t=sol.t) with respect to initial state. """
-function get_sensitivity(sol::Trajectory)
-    extract_STMs(sol)
+function StateTransitionTensor(sol::Trajectory)
+    SVector{length(sol.t)}([StateTransitionTensor(sol[i]) for i in 1:length(sol.t)])
 end
 
 @doc """ Sensitivity of the state at time t2 with respect to the state at time t1 <= t2. """
-function get_sensitivity(sol::Trajectory, t1, t2)
+function StateTransitionTensor(sol::Trajectory, t1, t2)
     @assert t1 <= t2  "Expected t1 <= t2"
     if t2 == t1
         return Matrix(1.0 * I, 6, 6)  # TODO: Make this type and size-generic, static
     else
-        return get_sensitivity(sol, t2) / get_sensitivity(sol, t1)
+        return StateTransitionTensor(sol, t2) / StateTransitionTensor(sol, t1)
     end
 end
 
-# TODO: Better functions for extracting STMs and stability index from Dual numbers
-function extract_STMs(sol::Trajectory, t)
-    extract_STMs(sol(t))
-end
-function extract_STMs(sol::Trajectory)
-    SVector{length(sol.t)}([extract_STMs(sol[i]) for i in 1:length(sol.t)])
-end
-function extract_STMs(state::State)
-    T = eltype(state.u0).parameters[1]  # Get the tag type
-    ForwardDiff.extract_jacobian(T, state.u0, values.(state.u0))
-end
-function stability_index(sol::Union{Trajectory,State})
-    hcat(eigvals.(extract_STMs(sol))...)
-end
+recursive_value(val) = val
+recursive_value(val::ForwardDiff.Dual) = recursive_value(ForwardDiff.value(val))
+
+get_order(valtype::Type{<:ForwardDiff.Dual}) = 1 + get_order(valtype.parameters[2])
+get_order(::Type{<:Number}) = 0

@@ -139,7 +139,7 @@ function (corrector::Abstract_AxisymmetricCorrector)(state::State, F, J, x; kwar
         # As per [Russell.2006, Eq.(10) to (13)], we need to add the time variation term, 
         # which requires the values of [ẏ, ż, ẍ]. Here, these are provided in the STM
         # on the "end" column (since we're calling corrector_solve with trace_time=true).
-        STM = extract_STMs([sol.u[end]])[1]
+        STM = StateTransitionMatrix(sol[end])
         J .= STM[[corrector.u1_free...], [corrector.u0_free..., end]]
     end
 end
