@@ -19,7 +19,9 @@ has_variational_equations(X::Type{<:State}) = has_variational_equations(fieldtyp
 @doc """ Return the fully propagated trajectory including state sensitivities with respect to the initial state. """
 solve_sensitivity(m::Module, args...; kwargs...) = solve_sensitivity(Val(first(fullname(m))), args...; kwargs...)
 function solve_sensitivity(::Val{:ForwardDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; order=1, trace_time=false, kwargs...)
-    values = trace_time ? [state.u0..., state.tspan[end] - state.tspan[begin]] : state.u0
+    trace_time && !isnothing(get(kwargs, :callback, nothing)) && @warn("trace_time sensitivity does not seem to play well with callbacks!")
+
+    values = trace_time ? [state.u0..., state.tspan[end]] : state.u0
 
     # Seed the values we want to trace with Dual numbers
     tag = typeof(state.model)
@@ -30,7 +32,7 @@ function solve_sensitivity(::Val{:ForwardDiff}, state::State, desired_frame=stat
     u0 = MVector{length(state.u0)}(duals[1:length(state.u0)])
 
     # Remake the state with the seeded values
-    tspan = trace_time ? (state.tspan[begin], state.tspan[begin] + duals[end]) : state.tspan
+    tspan = trace_time ? (state.tspan[begin], duals[end]) : state.tspan
     state_AD = remake(state; u0, tspan)
 
     # Solve and convert to the desired frame
@@ -74,7 +76,7 @@ StateTransitionMatrix(other::StateTransitionTensor) = StateTransitionTensor(othe
 StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwargs...)
 
 # Properties
-Base.axes(stm::StateTransitionMatrix) = (Base.OneTo(length(stm.vals)), Base.OneTo(length(stm.vals)))
+Base.axes(stm::StateTransitionMatrix) = (Base.OneTo(length(stm.vals)), Base.OneTo(length(stm.vals[1].partials)))
 Base.axes(stm::StateTransitionMatrix, d) = axes(stm)[d]
 
 function Base.getindex(stm::StateTransitionMatrix, idx...)

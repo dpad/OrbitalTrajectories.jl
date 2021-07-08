@@ -89,7 +89,7 @@ function corrector_solve(corrector::Abstract_AxisymmetricCorrector, state::State
     callback = strict ? corrector_callback(corrector, state.model; interp_points) : nothing
     userdata = Dict{Symbol,Any}(:crossings => crossings)  # XXX: Dict type specified for easy merging
 
-    sol = solve_sensitivity(AD, state, corrector.frame, corrector.alg; trace_time=true, abstol=1e-12, reltol=1e-12, callback, userdata, kwargs...)
+    sol = solve_sensitivity(AD, state, corrector.frame, corrector.alg; trace_time=isnothing(callback), abstol=1e-12, reltol=1e-12, callback, userdata, kwargs...)
     sol_tspan = ForwardDiff.value.((sol.t[begin], sol.t[end]))
 
     # Error-checking
