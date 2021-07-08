@@ -1,5 +1,5 @@
 export AD, FD, VE, solve_sensitivity, stability_index, has_variational_equations
-export StateTransitionMatrix, StateTransitionTensor, STM#, STT
+export StateTransitionMatrix, StateTransitionTensor, STM, STT
 
 #---------------------------#
 # SENSITIVITIES (i.e. STMs) #
@@ -65,19 +65,25 @@ struct StateTransitionTensor{N,V<:AbstractArray}
         return new{order, typeof(vals)}(vals)
     end
 end
-# const STT = StateTransitionTensor
+const STT = StateTransitionTensor
+
+# State Transition Matrix
+const StateTransitionMatrix{V} = StateTransitionTensor{1, V}
+const STM = StateTransitionMatrix
+StateTransitionMatrix(other::StateTransitionTensor) = StateTransitionTensor(other, 1)
+StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwargs...)
 
 # Properties
 Base.axes(stm::StateTransitionMatrix) = (Base.OneTo(length(stm.vals)), Base.OneTo(length(stm.vals)))
 Base.axes(stm::StateTransitionMatrix, d) = axes(stm)[d]
 
 function Base.getindex(stm::StateTransitionMatrix, idx...)
-    T = eltype(stm.vals).parameters[1]  # Get the tag type
-    STM = ForwardDiff.extract_jacobian(T, stm.vals, values.(dx))
-
-    result = similar(ydual, valtype(eltype(ydual)), length(ydual), length(x))
-    return ForwardDiff.extract_jacobian!(T, result, ydual, length(x))[idx...]
-
+    # TODO: Make this generic, currently expects ForwardDiff.Duals
+    # T = eltype(stm.vals).parameters[1]  # Get the tag type
+    # STM = ForwardDiff.extract_jacobian(T, stm.vals, SVector{6}([0., 0., 0., 0., 0., 0.]))
+    # @view STM[idx...]
+    @view ForwardDiff.value.(ForwardDiff.partials.(stm.vals, transpose(1:length(stm.vals[1].partials))))[idx...]
+    # Matrix([hcat([Array(t.partials) for t in ut]...)' for ut in [stm.vals]][1])[idx...]
 end
 
 Base.show(io::IO, x::StateTransitionTensor{N,V}) where {N,V} = print(io, "STT{$(nameof(eltype(V))), order=$(N)}$(recursive_value.(x.vals))")
@@ -91,12 +97,6 @@ end
 
 # Copy constructor
 StateTransitionTensor(other::STT, new_order=N) where {N,STT<:StateTransitionTensor{N}} = StateTransitionTensor(other.vals, new_order)
-
-# State Transition Matrix
-const StateTransitionMatrix{V} = StateTransitionTensor{1, V}
-const STM = StateTransitionMatrix
-StateTransitionMatrix(other::StateTransitionTensor) = StateTransitionTensor(other, 1)
-StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwargs...)
 
 @doc """ Extracts the State Transition Tensor from the state (solved with solve_sensitivity). """
 StateTransitionTensor(state::State) = StateTransitionTensor(state.u0)
