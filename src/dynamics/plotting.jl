@@ -133,6 +133,33 @@ end
             tspan_norm, max_eigenvalues
         end
     else
+        # TODO: Move this code out to a common Trajectory plotter.
+
+        # Plot the frame
+        if !get(plotattributes, :nomodel, false)
+            @series begin
+                seriesalpha := 1.0
+                (sol.model, sol.frame)
+            end
+            framestyle --> :zerolines
+        else
+            framestyle --> :none
+        end
+
+        # Plot the trajectory
+        xlim, ylim = get_margin_lims(sol, plotattributes)
+        xlims --> xlim
+        ylims --> ylim
+        
+        # Formatting
+        arrow --> true
+        dpi --> 150
+        size --> (400, 500)
+        legend --> false
+        xaxis --> (rotation=45)
+        aspect_ratio --> 1
+        ticks --> false
+
         vars = get(plotattributes, :vars, (1,2))
         ([[u[v].value for u in sol_interpolated.u] for v in vars]...,)
     end
