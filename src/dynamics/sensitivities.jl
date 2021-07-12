@@ -56,15 +56,16 @@ end
 
 
 # State Transition Tensors
-struct StateTransitionTensor{N,V<:AbstractArray}
+struct StateTransitionTensor{N,V<:AbstractArray,T}
+    tspan::Tuple{T,T}
     vals::V
 
     # Constructor
-    function StateTransitionTensor(vals, order=get_order(eltype(vals)))
+    function StateTransitionTensor(tspan, vals::AbstractArray, order=get_order(eltype(vals)))
         real_order = get_order(eltype(vals))
         order > 0 || throw("Expected order > 0, got $(order).")
         order <= real_order || throw("Values in given STT only support order <= $(real_order), got $(order).")
-        return new{order, typeof(vals)}(vals)
+        return new{order, typeof(vals), eltype(tspan)}(tuple(tspan...), vals)
     end
 end
 const STT = StateTransitionTensor
@@ -79,29 +80,26 @@ StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwarg
 Base.axes(stm::StateTransitionMatrix) = (Base.OneTo(length(stm.vals)), Base.OneTo(length(stm.vals[1].partials)))
 Base.axes(stm::StateTransitionMatrix, d) = axes(stm)[d]
 
-function Base.getindex(stm::StateTransitionMatrix, idx...)
+function Base.getindex(stm::StateTransitionMatrix, idx1, idx2)
     # TODO: Make this generic, currently expects ForwardDiff.Duals
-    # T = eltype(stm.vals).parameters[1]  # Get the tag type
-    # STM = ForwardDiff.extract_jacobian(T, stm.vals, SVector{6}([0., 0., 0., 0., 0., 0.]))
-    # @view STM[idx...]
-    @view ForwardDiff.value.(ForwardDiff.partials.(stm.vals, transpose(1:length(stm.vals[1].partials))))[idx...]
-    # Matrix([hcat([Array(t.partials) for t in ut]...)' for ut in [stm.vals]][1])[idx...]
+    @view ForwardDiff.value.(ForwardDiff.partials.(stm.vals, transpose(1:length(stm.vals[1].partials))))[idx1, idx2]
 end
 
 Base.show(io::IO, x::StateTransitionTensor{N,V}) where {N,V} = print(io, "STT{$(nameof(eltype(V))), order=$(N)}$(recursive_value.(x.vals))")
 Base.show(io::IO, x::StateTransitionMatrix{V}) where {V} = print(io, "STM{$(nameof(eltype(V)))}$(recursive_value.(x.vals))")
 
 function (Base.:+)(stm::StateTransitionMatrix, dx::AbstractArray{<:Number})
+    @error "Addition not yet supported with new STT/STM types!"
 #     T = eltype(state.u0).parameters[1]  # Get the tag type
     # STM = ForwardDiff.extract_jacobian(T, stm.vals, values.(dx))
     @info "mult!"
 end
 
 # Copy constructor
-StateTransitionTensor(other::STT, new_order=N) where {N,STT<:StateTransitionTensor{N}} = StateTransitionTensor(other.vals, new_order)
+StateTransitionTensor(other::STT, new_order=N) where {N,STT<:StateTransitionTensor{N}} = StateTransitionTensor(other.tspan, other.vals, new_order)
 
 @doc """ Extracts the State Transition Tensor from the state (solved with solve_sensitivity). """
-StateTransitionTensor(state::State) = StateTransitionTensor(state.u0)
+StateTransitionTensor(state::State) = StateTransitionTensor(state.prob.tspan, state.u0)
 
 @doc """ Solve and return the sensitivity of the final state (at t=state.tspan[2]) with respect to the given state. """
 StateTransitionTensor(m::Module, args...; kwargs...) = StateTransitionTensor(Val(first(fullname(m))), args...; kwargs...)
@@ -127,12 +125,12 @@ function StateTransitionTensor(sol::Trajectory)
 end
 
 @doc """ Sensitivity of the state at time t2 with respect to the state at time t1 <= t2. """
-function StateTransitionTensor(sol::Trajectory, t1, t2)
+function StateTransitionMatrix(sol::Trajectory, t1, t2)
     @assert t1 <= t2  "Expected t1 <= t2"
     if t2 == t1
         return Matrix(1.0 * I, 6, 6)  # TODO: Make this type and size-generic, static
     else
-        return StateTransitionTensor(sol, t2) / StateTransitionTensor(sol, t1)
+        return StateTransitionMatrix(sol, t2)[:,:] / StateTransitionMatrix(sol, t1)[:,:]
     end
 end
 

@@ -106,6 +106,14 @@ end
     sol.sol
 end
 
+@recipe function f(STMs::AbstractArray{<:STM})
+    label --> ""
+    legend --> false
+    vals = hcat([vec(s[:,:]) for s in STMs]...)'
+    ts = [s.tspan[end] for s in STMs]
+    ts, vals
+end
+
 @recipe function f(sol::Trajectory{<:Abstract_DynamicalModel,<:Abstract_ReferenceFrame,T}) where {T <: ForwardDiff.Dual}
     trace_vars = get(plotattributes, :trace, false)
     trace_stability = get(plotattributes, :trace_stability, false)
@@ -117,12 +125,7 @@ end
     sol_interpolated = sol(tspan)
 
     if trace_vars
-        STMs = get_sensitivity(sol_interpolated)
-        @series begin
-            label --> ""
-            legend --> false
-            tspan_norm, STMs
-        end
+        STM(sol_interpolated)
     elseif trace_stability
         stability_indices = norm.(stability_index(sol_interpolated))'
         sorted_indices = hcat(map(sort, eachslice(stability_indices, dims=1))...)[4:6,:]'
