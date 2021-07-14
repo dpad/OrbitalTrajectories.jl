@@ -1,25 +1,25 @@
 module Dynamics
     using OrbitalTrajectories.SpiceUtils
 
-    using SPICE
-    using Plots
-    using Unitful
-    using DifferentialEquations
     using DiffEqBase
     using DiffEqSensitivity
-    using SciMLBase
+    using DifferentialEquations
+    using FiniteDiff
+    using ForwardDiff
     using LinearAlgebra
+    using LineSearches
+    using Memoize
     using ModelingToolkit
     using NLsolve
-    using LineSearches
-    using ForwardDiff
-    using FiniteDiff
-    using Memoize
-    using SimpleTraits
-    using StaticArrays
+    using PhysicalConstants.CODATA2014: NewtonianConstantOfGravitation
+    using Plots
     using ProgressMeter
     using RecipesBase
-    using PhysicalConstants.CODATA2014: NewtonianConstantOfGravitation
+    using SciMLBase
+    using SimpleTraits
+    using SPICE
+    using StaticArrays
+    using Unitful
 
     # Required to ensure that we can precompile ODEFunctions (which needs to be
     # done in our own cache).
@@ -41,6 +41,9 @@ module Dynamics
 
     # Differential correctors
     abstract type Abstract_DifferentialCorrector end
+
+    # Sensitivities
+    abstract type Abstract_StateTransitionTensor{N} end
 
     #----------#
     # INCLUDES #

@@ -54,19 +54,28 @@ function stability_index(sol::Union{Trajectory,State})
     hcat(eigvals.(extract_STMs(sol))...)
 end
 
-
 # State Transition Tensors
-struct StateTransitionTensor{N,V<:AbstractArray,T}
-    tspan::Tuple{T,T}
-    vals::V
+struct StateTransitionTensor{N,V<:AbstractArray} <: Abstract_StateTransitionTensor{N}
+    tensor::V
 
-    # Constructor
-    function StateTransitionTensor(tspan, vals::AbstractArray, order=get_order(eltype(vals)))
-        real_order = get_order(eltype(vals))
-        order > 0 || throw("Expected order > 0, got $(order).")
-        order <= real_order || throw("Values in given STT only support order <= $(real_order), got $(order).")
-        return new{order, typeof(vals), eltype(tspan)}(tuple(tspan...), vals)
+    function StateTransitionTensor(tensor::V) where {V<:AbstractArray}
+        order = ndims(V) - 1
+        new{order, V}(tensor)
     end
+end
+
+# Constructor
+
+@doc """ Extracts the State Transition Tensor from the state (solved with solve_sensitivity). """
+function StateTransitionTensor(state::State, order=get_order(eltype(state.u0)))
+    vals = state.u0
+    real_order = get_order(eltype(vals))
+    order > 0 || throw("Expected order > 0, got $(order).")
+    order <= real_order || throw("Values in given STT only support order <= $(real_order), got $(order).")
+    I = size(vals)[1]
+    O = ForwardDiff.npartials(eltype(vals))
+    partials = SArray{Tuple{I,O}}(ForwardDiff.partials.(vals, transpose(1:O)))
+    return StateTransitionTensor(partials)
 end
 const STT = StateTransitionTensor
 
@@ -81,25 +90,23 @@ Base.axes(stm::StateTransitionMatrix) = (Base.OneTo(length(stm.vals)), Base.OneT
 Base.axes(stm::StateTransitionMatrix, d) = axes(stm)[d]
 
 function Base.getindex(stm::StateTransitionMatrix, idx1, idx2)
-    # TODO: Make this generic, currently expects ForwardDiff.Duals
+    # TODO: Make this generic, currently expects ForwardDiff.Duals. Change to a memoized function that computes the STM matrix.
     @view ForwardDiff.value.(ForwardDiff.partials.(stm.vals, transpose(1:length(stm.vals[1].partials))))[idx1, idx2]
 end
 
-Base.show(io::IO, x::StateTransitionTensor{N,V}) where {N,V} = print(io, "STT{$(nameof(eltype(V))), order=$(N)}$(recursive_value.(x.vals))")
-Base.show(io::IO, x::StateTransitionMatrix{V}) where {V} = print(io, "STM{$(nameof(eltype(V)))}$(recursive_value.(x.vals))")
+Base.show(io::IO, x::StateTransitionTensor{N}) where {N} = print(io, "STT{order=$(N)}($(x.tensor))")
+Base.show(io::IO, x::StateTransitionMatrix) = print(io, "STM($(x.tensor))")
 
-function (Base.:+)(stm::StateTransitionMatrix, dx::AbstractArray{<:Number})
-    @error "Addition not yet supported with new STT/STM types!"
-#     T = eltype(state.u0).parameters[1]  # Get the tag type
-    # STM = ForwardDiff.extract_jacobian(T, stm.vals, values.(dx))
-    @info "mult!"
+function (Base.:*)(stm::StateTransitionTensor, x)
+    stm.tensor * x
+end
+
+function (Base.:*)(stt1::StateTransitionTensor, stt2::StateTransitionTensor)
+    StateTransitionTensor(stt1.tensor * stt2.tensor)
 end
 
 # Copy constructor
-StateTransitionTensor(other::STT, new_order=N) where {N,STT<:StateTransitionTensor{N}} = StateTransitionTensor(other.tspan, other.vals, new_order)
-
-@doc """ Extracts the State Transition Tensor from the state (solved with solve_sensitivity). """
-StateTransitionTensor(state::State) = StateTransitionTensor(state.prob.tspan, state.u0)
+# StateTransitionTensor(other::STT, new_order=N) where {N,STT<:StateTransitionTensor{N}} = StateTransitionTensor(other.model, other.tensor, new_order)
 
 @doc """ Solve and return the sensitivity of the final state (at t=state.tspan[2]) with respect to the given state. """
 StateTransitionTensor(m::Module, args...; kwargs...) = StateTransitionTensor(Val(first(fullname(m))), args...; kwargs...)
