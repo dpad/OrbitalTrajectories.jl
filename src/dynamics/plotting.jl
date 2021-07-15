@@ -120,7 +120,7 @@ end
     denseplot = get(plotattributes, :denseplot, true)
     plotdensity = get(plotattributes, :plotdensity, 1000)
 
-    tspan = ForwardDiff.value.(denseplot ? range(sol.t[begin], sol.t[end], length=plotdensity) : sol.t)
+    tspan = recursive_value.(denseplot ? range(sol.t[begin], sol.t[end], length=plotdensity) : sol.t)
     tspan_norm = @. (tspan - tspan[begin]) / (tspan[end] - tspan[begin])
     sol_interpolated = sol(tspan)
 
@@ -164,7 +164,7 @@ end
         ticks --> false
 
         vars = get(plotattributes, :vars, (1,2))
-        ([[u[v].value for u in sol_interpolated.u] for v in vars]...,)
+        ([[recursive_value(u[v]) for u in sol_interpolated.u] for v in vars]...,)
     end
 end
 
@@ -277,7 +277,7 @@ function get_margin_lims(sol::Trajectory, plotattributes)
     a, b = get(plotattributes, :vars, (1, 2))
 
     # Work out the maximum extent of the orbit
-    x, y = (ForwardDiff.value.(sol.sol[a,:]), ForwardDiff.value.(sol.sol[b,:]))
+    x, y = (recursive_value.(sol.sol[a,:]), recursive_value.(sol.sol[b,:]))
     xlim = (minimum(x), maximum(x))
     ylim = (minimum(y), maximum(y))
 
