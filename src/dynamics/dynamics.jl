@@ -8,6 +8,7 @@ module Dynamics
     using ForwardDiff
     using LinearAlgebra
     using LineSearches
+    using LoopVectorization
     using Memoize
     using ModelingToolkit
     using NLsolve
@@ -19,6 +20,7 @@ module Dynamics
     using SimpleTraits
     using SPICE
     using StaticArrays
+    using Tullio
     using Unitful
 
     # Required to ensure that we can precompile ODEFunctions (which needs to be

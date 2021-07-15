@@ -55,89 +55,92 @@ function stability_index(sol::Union{Trajectory,State})
 end
 
 # State Transition Tensors
-struct StateTransitionTensor{N,V<:AbstractArray} <: Abstract_StateTransitionTensor{N}
-    tensor::V
+struct StateTransitionTensor{Order,Size<:Tuple,TensorsTuple<:Tuple} <: Abstract_StateTransitionTensor{Order}
+    tensors::TensorsTuple
 
-    function StateTransitionTensor(tensor::V) where {V<:AbstractArray}
-        order = ndims(V) - 1
-        new{order, V}(tensor)
+    function StateTransitionTensor(tensors::TensorsTuple) where {TensorsTuple<:Tuple}
+        order = length(tensors)
+        tensor_size = size(tensors[1])
+        new{order, Tuple{tensor_size...}, TensorsTuple}(tensors)
     end
 end
 
 # Constructor
 
 @doc """ Extracts the State Transition Tensor from the state (solved with solve_sensitivity). """
-function StateTransitionTensor(state::State, order=get_order(eltype(state.u0)))
-    vals = state.u0
-    real_order = get_order(eltype(vals))
-    order > 0 || throw("Expected order > 0, got $(order).")
-    order <= real_order || throw("Values in given STT only support order <= $(real_order), got $(order).")
-    I = size(vals)[1]
-    O = ForwardDiff.npartials(eltype(vals))
-    partials = SArray{Tuple{I,O}}(ForwardDiff.partials.(vals, transpose(1:O)))
-    return StateTransitionTensor(partials)
+function StateTransitionTensor(state::State; order=get_order(eltype(state.u0)))
+    real_order = get_order(eltype(state.u0))
+    order > 0 || error("Expected order > 0, got $(order).")
+    order <= real_order || error("Values in given STT only support order <= $(real_order), got $(order).")
+
+    # TODO: Make this generic (assumes ForwardDiff partials)
+
+    input_length = length(state.u0)
+    output_length = ForwardDiff.npartials(eltype(state.u0))
+
+    tensors = SArray[]
+    for o in 1:order
+        output_dims = ntuple(x -> output_length, o)
+
+        coeff = 1 / factorial(o)
+        tensor = SArray{Tuple{input_length,output_dims...}}(
+            ForwardDiff.value.(
+                ForwardDiff.partials.(
+                    state.u0, 
+                    ntuple(i -> reshape(1:output_dims[i], (ntuple(x -> 1, i)..., output_dims[i])), o)...
+                )
+            )
+        )
+        
+        push!(tensors, coeff * tensor)
+    end
+    return StateTransitionTensor(tuple(tensors...))
 end
 const STT = StateTransitionTensor
 
 # State Transition Matrix
-const StateTransitionMatrix{V} = StateTransitionTensor{1, V}
+const StateTransitionMatrix = StateTransitionTensor{1}
 const STM = StateTransitionMatrix
-StateTransitionMatrix(other::StateTransitionTensor) = StateTransitionTensor(other, 1)
-StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwargs...)
+StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwargs..., order=1)
 
 # Properties
-Base.axes(stm::StateTransitionMatrix) = (Base.OneTo(length(stm.vals)), Base.OneTo(length(stm.vals[1].partials)))
-Base.axes(stm::StateTransitionMatrix, d) = axes(stm)[d]
+# Base.axes(stm::StateTransitionTensor, args...) = axes(stm.tensor, args...)
 
-function Base.getindex(stm::StateTransitionMatrix, idx1, idx2)
-    # TODO: Make this generic, currently expects ForwardDiff.Duals. Change to a memoized function that computes the STM matrix.
-    @view ForwardDiff.value.(ForwardDiff.partials.(stm.vals, transpose(1:length(stm.vals[1].partials))))[idx1, idx2]
+# Base.getindex(stm::StateTransitionMatrix, idx1, idx2) = @view stm.tensor[idx1, idx2]
+
+Base.show(io::IO, x::StateTransitionTensor{Order,Size}) where {Order,Size} = print(io, "STT{order=$(Order)}$(tuple(Size.parameters...))")
+Base.show(io::IO, x::StateTransitionMatrix{Size}) where {Size} = print(io, "STM$(tuple(Size.parameters...))")
+
+function (Base.:*)(stm::StateTransitionTensor{1}, dx)
+    A = stm.tensors[1]
+    @tullio(DX[i] := A[i,j] * dx[j])
+    DX
 end
 
-Base.show(io::IO, x::StateTransitionTensor{N}) where {N} = print(io, "STT{order=$(N)}($(x.tensor))")
-Base.show(io::IO, x::StateTransitionMatrix) = print(io, "STM($(x.tensor))")
-
-function (Base.:*)(stm::StateTransitionTensor, x)
-    stm.tensor * x
+function (Base.:*)(stm::StateTransitionTensor{2}, dx)
+    A, B = stm.tensors
+    @tullio(DX[i] := A[i,j] * dx[j])
+    @tullio(DX[i] += B[i,j,k] * dx[j] * dx[k])
+    DX
 end
 
 function (Base.:*)(stt1::StateTransitionTensor, stt2::StateTransitionTensor)
     StateTransitionTensor(stt1.tensor * stt2.tensor)
 end
 
-# Copy constructor
-# StateTransitionTensor(other::STT, new_order=N) where {N,STT<:StateTransitionTensor{N}} = StateTransitionTensor(other.model, other.tensor, new_order)
-
-@doc """ Solve and return the sensitivity of the final state (at t=state.tspan[2]) with respect to the given state. """
-StateTransitionTensor(m::Module, args...; kwargs...) = StateTransitionTensor(Val(first(fullname(m))), args...; kwargs...)
-function StateTransitionTensor(m::Val, state::State, args...; kwargs...)
-    sol = solve_sensitivity(m, state, args...; kwargs...)
-    StateTransitionTensor(sol, sol.t[end])
-end
-function StateTransitionMatrix(::Val{:FiniteDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...)
-    FiniteDiff.finite_difference_jacobian(state.u0) do u0
-        new_state = remake(state, u0=u0)
-        return convert_to_frame(solve(new_state, alg; kwargs...), desired_frame).sol[end]
-    end
-end
-
 @doc """ Sensitivity of the interpolated states (at times t) with respect to initial state. """
-function StateTransitionTensor(sol::Trajectory, t)
-    StateTransitionTensor(sol(t))
-end
+StateTransitionTensor(sol::Trajectory, t; kwargs...) = StateTransitionTensor(sol(t); kwargs...)
 
 @doc """ Sensitivity trace of each state (at times t=sol.t) with respect to initial state. """
-function StateTransitionTensor(sol::Trajectory)
-    SVector{length(sol.t)}([StateTransitionTensor(sol[i]) for i in 1:length(sol.t)])
-end
+StateTransitionTensor(sol::Trajectory; kwargs...) = SVector{length(sol.t)}([StateTransitionTensor(sol[i]; kwargs...) for i in 1:length(sol.t)])
 
 @doc """ Sensitivity of the state at time t2 with respect to the state at time t1 <= t2. """
-function StateTransitionMatrix(sol::Trajectory, t1, t2)
+function StateTransitionMatrix(sol::Trajectory, t1, t2; kwargs...)
     @assert t1 <= t2  "Expected t1 <= t2"
     if t2 == t1
         return Matrix(1.0 * I, 6, 6)  # TODO: Make this type and size-generic, static
     else
-        return StateTransitionMatrix(sol, t2)[:,:] / StateTransitionMatrix(sol, t1)[:,:]
+        return StateTransitionMatrix(sol, t2; kwargs...)[:,:] / StateTransitionMatrix(sol, t1; kwargs...)[:,:]
     end
 end
 
