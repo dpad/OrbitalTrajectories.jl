@@ -42,6 +42,10 @@ module Dynamics
     # Differential correctors
     abstract type Abstract_DifferentialCorrector end
 
+    # States and trajectories
+    abstract type Abstract_State end
+    abstract type Abstract_Trajectory{M<:Abstract_DynamicalModel,F<:Abstract_ReferenceFrame,uType,tType,isinplace,O<:SciMLBase.AbstractODEProblem{uType,tType,isinplace}} <: SciMLBase.AbstractODEProblem{uType,tType,isinplace} end
+
     #----------#
     # INCLUDES #
     #----------#

@@ -6,24 +6,35 @@ export collision, check_distance, crashed
 # ORBITAL PROBLEMS #
 #------------------#
 
-struct State{M<:Abstract_DynamicalModel,F<:Abstract_ReferenceFrame,uType,tType,isinplace,O<:SciMLBase.AbstractODEProblem{uType,tType,isinplace}} <: SciMLBase.AbstractODEProblem{uType,tType,isinplace}
-    model :: M
+struct State{F<:Abstract_ReferenceFrame,uType<:AbstractArray,tType<:Number} <: Abstract_State
     frame :: F  # Reference frame that the problem's u0 is defined in
+    t0 :: tType
+    u0 :: uType
+end
+State(frame::Abstract_ReferenceFrame, u0::AbstractArray, t::Number) =
+    State(frame, SVector{6}(u0), t)
+
+struct StateODE{M<:Abstract_DynamicalModel,S<:Abstract_State,uType,tType,isinplace,O<:SciMLBase.AbstractODEProblem{uType,tType,isinplace}} <: SciMLBase.AbstractODEProblem{uType,tType,isinplace}
+    model :: M
+    state :: S
     prob :: O
 end
-State(model::Abstract_DynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::AbstractArray, tspan) =
-    State(model, reference_frame, MArray{Tuple{size(u0)...}}(u0), tspan)
-State(model::Abstract_DynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::StaticArray, tspan) =
-    State(model, reference_frame, ODEProblem(model, u0, tspan, parameters(model)))
-State(model::Abstract_DynamicalModel, u0::AbstractArray, tspan) = State(model, default_reference_frame(model), u0, tspan)
+StateODE(model::Abstract_DynamicalModel, state::State) =
+    StateODE(model, state, ODEProblem(model, state.u0, state.t0, parameters(model)))
+function StateODE(model::Abstract_DynamicalModel, frame::Abstract_ReferenceFrame, u0::AbstractArray, t0::Number)
+    state = State(frame, u0, t0)
+    StateODE(model, state)
+end
+StateODE(model::Abstract_DynamicalModel, u0::AbstractArray, t0::Number) =
+    StateODE(model, default_reference_frame(model), u0, t0)
 
-struct Trajectory{M<:Abstract_DynamicalModel,F<:Abstract_ReferenceFrame,T,N,A,O<:DiffEqBase.AbstractTimeseriesSolution{T,N,A},} <: DiffEqBase.AbstractTimeseriesSolution{T,N,A}
+struct Trajectory{M<:Abstract_DynamicalModel,F<:Abstract_ReferenceFrame,T,N,A,O<:DiffEqBase.AbstractTimeseriesSolution{T,N,A}} <: DiffEqBase.AbstractTimeseriesSolution{T,N,A}
     model :: M
     frame :: F  # Reference frame that the solution is defined in
     sol :: O
 end
 
-State(traj::Trajectory) = State(traj.model, traj.frame, traj.sol.prob)
+State(traj::Trajectory) = State(traj.model, traj.frame, traj.sol.prob.u0, traj.sol.prob.tspan[begin])
 
 primary_body(state::State) = primary_body(state.model)
 primary_body(traj::Trajectory) = primary_body(traj.model)
