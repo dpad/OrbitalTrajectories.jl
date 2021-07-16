@@ -2,7 +2,7 @@ export AD, FD, VE, solve_sensitivity, stability_index, has_variational_equations
 export StateTransitionMatrix, StateTransitionTensor, STM, STT
 
 #---------------------------#
-# SENSITIVITIES (i.e. STMs) #
+# SOLVING WITH SENSITIVITY  #
 #---------------------------#
 
 # TODO: Use Symbols instead of these constants?
@@ -54,14 +54,35 @@ function stability_index(sol::Union{Trajectory,State})
     hcat(eigvals.(extract_STMs(sol))...)
 end
 
-# State Transition Tensors
+#--------------------------------#
+# State Transition Tensors (STT) #
+#--------------------------------#
+#
+# An STT represents the sensitivities of a set of output functions with respect
+# to some input variables (around some reference point).
+# The Size tuple is (Out, In), where Out is the number of output functions, and
+# In is the number of input variables.
+#
+# For example, a dynamical model with variables [x, y, z, ẋ, ẏ, ż] has Out=6,
+# and usually these are defined with respect to u0 = [x(0), y(0), z(0), ẋ(0),
+# ẏ(0), ż(0)], so In=6 (or it may also include t, in which case In=7).
 struct StateTransitionTensor{Order,Size<:Tuple,TensorsTuple<:Tuple} <: Abstract_StateTransitionTensor{Order}
+    # tensors[i] holds the ith-order tensor, already multiplied by its 1/factorial(i) coefficient.
+    #
+    # For example, the 1st-order tensor is simply the State Transition Matrix of
+    # size (Out, In). Note that ndims=2 and hence it is called a "Matrix".
+    #
+    # The 2nd-order tensor is 1/(2!) * (2nd-order derivatives arrays of size
+    # (Out, In, In)). Note that ndims=3.
+    #
+    # Similarly, each ith-order tensor has a size of (Out, In...) where ndims=i+1.
     tensors::TensorsTuple
 
     function StateTransitionTensor(tensors::TensorsTuple) where {TensorsTuple<:Tuple}
         order = length(tensors)
+        coeffs = [1 / factorial(i) for i in 1:order]
         tensor_size = size(tensors[1])
-        new{order, Tuple{tensor_size...}, TensorsTuple}(tensors)
+        new{order, Tuple{tensor_size...}, TensorsTuple}(tuple((coeffs .* tensors)...))
     end
 end
 
@@ -82,7 +103,6 @@ function StateTransitionTensor(state::State; order=get_order(eltype(state.u0)))
     for o in 1:order
         output_dims = ntuple(x -> output_length, o)
 
-        coeff = 1 / factorial(o)
         tensor = SArray{Tuple{input_length,output_dims...}}(
             ForwardDiff.value.(
                 ForwardDiff.partials.(
@@ -92,7 +112,7 @@ function StateTransitionTensor(state::State; order=get_order(eltype(state.u0)))
             )
         )
         
-        push!(tensors, coeff * tensor)
+        push!(tensors, tensor)
     end
     return StateTransitionTensor(tuple(tensors...))
 end
@@ -108,26 +128,36 @@ const StateTransitionMatrix = StateTransitionTensor{1}
 const STM = StateTransitionMatrix
 StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwargs..., order=1)
 
-# Properties
-# Base.axes(stm::StateTransitionTensor, args...) = axes(stm.tensor, args...)
-
-# Base.getindex(stm::StateTransitionMatrix, idx1, idx2) = @view stm.tensor[idx1, idx2]
-
+# Display
 Base.show(io::IO, x::StateTransitionTensor{Order,Size}) where {Order,Size} = print(io, "STT{order=$(Order)}$(tuple(Size.parameters...))")
 Base.show(io::IO, x::StateTransitionMatrix{Size}) where {Size} = print(io, "STM$(tuple(Size.parameters...))")
 
+# Generate multiplication functions for STTs up to MAX_STT_ORDER
+#----------------------------------------------------------------
+# Each multiplication function uses Tullio.@tullio to perform a tensor contraction using einstein summation notation,
+# contracting each tensor in STT.tensors with the appropriate number of vector values.
+# XXX: I tried doing this with @generated functions, but it seems that the @tullio macro creates closures, meaning
+# it can't be used in the output of an @generated function.
 const MAX_STT_ORDER = 4
 for STT_ORDER in 1:MAX_STT_ORDER
     exprs = []
     for order in 1:STT_ORDER
+        # The ith-order STT should be contracted with i variables.
+        # For example, an STM (order=1) is DX[i] = STM[i,j] * dx[j]
+        # But an STT(order=2) is DX[i] = STM[i,j,k] * dx[j] * dx[k]
+        #
+        # Here, we generate an automatic list of indices (e.g. (j, k)), and from
+        # that a list of [dx[j], dx[k]...].
         tensor_indices = [gensym() for _ in 2:(order+1)]
         dxs = [:(dx[$(tensor_indices[i])]) for i in 1:order]
+
         push!(exprs, quote
             tensor = stt.tensors[$(order)]
             @tullio DX[i] += tensor[i,$(tensor_indices...)] * *($(dxs...))
         end)
     end
     eval(quote
+        # Create a function specialised to the specific STT order.
         function (Base.:*)(stt::StateTransitionTensor{$(STT_ORDER)}, dx::AbstractVector)
             DX = zeros(eltype(stt.tensors[1]), tensor_size(stt)[1])
             $(exprs...)
@@ -136,11 +166,10 @@ for STT_ORDER in 1:MAX_STT_ORDER
     end)
 end
 
+# STTs of orders not generated above are not supported automatically. Users
+# should define their contractions manually. (I wanted to do this completely
+# automatically but haven't been able to yet.)
 (Base.:*)(::StateTransitionTensor{Order}, _) where {Order} = error("Multiplication for STT of order $(Order) not defined, please write it yourself!")
-
-# function (Base.:*)(stt1::StateTransitionTensor, stt2::StateTransitionTensor)
-#     StateTransitionTensor(stt1.tensor * stt2.tensor)
-# end
 
 @doc """ Sensitivity of the interpolated states (at times t) with respect to initial state. """
 StateTransitionTensor(sol::Trajectory, t; kwargs...) = StateTransitionTensor(sol(t); kwargs...)
@@ -154,7 +183,7 @@ function StateTransitionMatrix(sol::Trajectory, t1, t2; kwargs...)
     if t2 == t1
         return Matrix(1.0 * I, 6, 6)  # TODO: Make this type and size-generic, static
     else
-        return StateTransitionMatrix(sol, t2; kwargs...)[:,:] / StateTransitionMatrix(sol, t1; kwargs...)[:,:]
+        return StateTransitionMatrix(sol, t2; kwargs...) / StateTransitionMatrix(sol, t1; kwargs...)
     end
 end
 
