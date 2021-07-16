@@ -98,6 +98,11 @@ function StateTransitionTensor(state::State; order=get_order(eltype(state.u0)))
 end
 const STT = StateTransitionTensor
 
+tensor_order(::Type{<:StateTransitionTensor{Order}}) where {Order} = Order
+tensor_order(stt::StateTransitionTensor) = tensor_order(typeof(stt))
+tensor_size(::Type{<:StateTransitionTensor{Order,Size}}) where {Order,Size} = tuple(Size.parameters...)
+tensor_size(stt::StateTransitionTensor{Order,Size}) where {Order,Size} = tensor_size(typeof(stt))
+
 # State Transition Matrix
 const StateTransitionMatrix = StateTransitionTensor{1}
 const STM = StateTransitionMatrix
@@ -111,22 +116,31 @@ StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwarg
 Base.show(io::IO, x::StateTransitionTensor{Order,Size}) where {Order,Size} = print(io, "STT{order=$(Order)}$(tuple(Size.parameters...))")
 Base.show(io::IO, x::StateTransitionMatrix{Size}) where {Size} = print(io, "STM$(tuple(Size.parameters...))")
 
-function (Base.:*)(stm::StateTransitionTensor{1}, dx)
-    A = stm.tensors[1]
-    @tullio(DX[i] := A[i,j] * dx[j])
-    DX
+const MAX_STT_ORDER = 4
+for STT_ORDER in 1:MAX_STT_ORDER
+    exprs = []
+    for order in 1:STT_ORDER
+        tensor_indices = [gensym() for _ in 2:(order+1)]
+        dxs = [:(dx[$(tensor_indices[i])]) for i in 1:order]
+        push!(exprs, quote
+            tensor = stt.tensors[$(order)]
+            @tullio DX[i] += tensor[i,$(tensor_indices...)] * *($(dxs...))
+        end)
+    end
+    eval(quote
+        function (Base.:*)(stt::StateTransitionTensor{$(STT_ORDER)}, dx::AbstractVector)
+            DX = zeros(eltype(stt.tensors[1]), tensor_size(stt)[1])
+            $(exprs...)
+            DX
+        end
+    end)
 end
 
-function (Base.:*)(stm::StateTransitionTensor{2}, dx)
-    A, B = stm.tensors
-    @tullio(DX[i] := A[i,j] * dx[j])
-    @tullio(DX[i] += B[i,j,k] * dx[j] * dx[k])
-    DX
-end
+(Base.:*)(::StateTransitionTensor{Order}, _) where {Order} = error("Multiplication for STT of order $(Order) not defined, please write it yourself!")
 
-function (Base.:*)(stt1::StateTransitionTensor, stt2::StateTransitionTensor)
-    StateTransitionTensor(stt1.tensor * stt2.tensor)
-end
+# function (Base.:*)(stt1::StateTransitionTensor, stt2::StateTransitionTensor)
+#     StateTransitionTensor(stt1.tensor * stt2.tensor)
+# end
 
 @doc """ Sensitivity of the interpolated states (at times t) with respect to initial state. """
 StateTransitionTensor(sol::Trajectory, t; kwargs...) = StateTransitionTensor(sol(t); kwargs...)
