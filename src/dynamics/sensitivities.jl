@@ -1,4 +1,5 @@
-export AD, FD, VE, solve_sensitivity
+export AD, FD, VE
+export solve_sensitivity, supports_sensitivity_variational_equations
 export StateTransitionMatrix, StateTransitionTensor, STM, STT
 
 #---------------------------#
@@ -11,10 +12,10 @@ const FD = FiniteDiff
 const VE = Val(:VariationalEquations)
 
 @traitdef HasVE{X}
-@traitimpl HasVE{X} <- has_variational_equations(X)
-has_variational_equations(X::Type{<:Abstract_ModelODEFunctions}) = hasfield(X, :ode_stm_f)
-has_variational_equations(X::Type{<:Abstract_DynamicalModel}) = has_variational_equations(fieldtype(X, :ode))
-has_variational_equations(X::Type{<:State}) = has_variational_equations(fieldtype(X, :model))
+@traitimpl HasVE{X} <- supports_sensitivity_variational_equations(X)
+supports_sensitivity_variational_equations(X::Type{<:Abstract_ModelODEFunctions}) = hasfield(X, :ode_stm_f)
+supports_sensitivity_variational_equations(X::Type{<:Abstract_DynamicalModel}) = supports_sensitivity_variational_equations(fieldtype(X, :ode))
+supports_sensitivity_variational_equations(X::Type{<:State}) = supports_sensitivity_variational_equations(fieldtype(X, :model))
 
 @doc """ Return the fully propagated trajectory including state sensitivities with respect to the initial state. """
 solve_sensitivity(m::Module, args...; kwargs...) = solve_sensitivity(Val(first(fullname(m))), args...; kwargs...)

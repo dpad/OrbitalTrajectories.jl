@@ -186,7 +186,7 @@ for (j, case) in enumerate(test_cases)
             origin_secondary=false, case.plot_args..., plot_attrs...)
 
         # Build trace using Variational Equations (VE)
-        if has_variational_equations(typeof(state))
+        if supports_sensitivity_variational_equations(typeof(state))
             traj_VE = solve_sensitivity(VE, state, frame)
             VE_label = " & VE"
 
