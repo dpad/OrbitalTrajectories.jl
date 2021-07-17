@@ -40,7 +40,9 @@ function solve_sensitivity(::Val{:ForwardDiff}, state::State, desired_frame=stat
     sol = solve(state_AD, alg; kwargs...)
     return convert_to_frame(sol, desired_frame)
 end
-@traitfn function solve_sensitivity(::Val{:VariationalEquations}, state::S, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...) where {S; HasVE{S}}
+@traitfn function solve_sensitivity(::Val{:VariationalEquations}, state::S, desired_frame=state.frame, alg=DEFAULT_ALG; order=1, kwargs...) where {S; HasVE{S}}
+    order == 1 || error("Variational equations only support order=1 for now.")
+
     dim = length(state.u0)
     I_flat = reshape(Matrix{Float64}(I, dim, dim), dim^2)
     u0_STM = MVector{dim^2 + dim}(vcat(state.u0, I_flat))
@@ -87,26 +89,17 @@ const STT = StateTransitionTensor
 
 # Constructors
 StateTransitionTensor(m::Module, args...; kwargs...) = StateTransitionTensor(Val(first(fullname(m))), args...; kwargs...)
-StateTransitionTensor(v::Val, args...; order=1, kwargs...) = StateTransitionTensor(solve_sensitivity(v, args...; kwargs...); order)
+StateTransitionTensor(v::Val, args...; kwargs...) = StateTransitionTensor(solve_sensitivity(v, args...; kwargs...))
 
 @doc """ Extracts the State Transition Tensor from the state (solved with solve_sensitivity). """
 function StateTransitionTensor(state::S; order=get_order(eltype(state.u0))) where {S<:State}
-    real_order = get_order(eltype(state.u0))
-
-    if real_order == 0 && has_variational_equations(S)
-        # Variational Equations
-        order == 1 || @warn "StateTransitionTensor from Variational Equations currently only supports order=1."
-        tensors = extract_STT(state.u0, state_length(state), 1)
-    else
-        order > 0 || error("Expected order > 0, got $(order).")
-        order <= real_order || error("Values in given STT only support order <= $(real_order), got $(order).")
-        tensors = extract_STT(state.u0, state_length(state), order)
-    end
-
+    tensors = extract_sensitivity_tensors(state.u0, state_length(state), order)
     return StateTransitionTensor(tensors)
 end
 
-function extract_STT(u0::AbstractArray, input_length, order)
+function extract_sensitivity_tensors(u0::AbstractArray, input_length, order)
+    order == 0 || order == 1 || error("Given state only contains Variational Equation sensitivities of up to order 1, but got $(order).")
+
     # Variational Equations
     expected_length = input_length^2 + input_length
     length(u0) == expected_length || error("Unknown sensitivity type, expected $(expected_length) variables but got $(length(u0)).")
@@ -115,7 +108,11 @@ function extract_STT(u0::AbstractArray, input_length, order)
     return (tensor,)
 end
 
-function extract_STT(u0::AbstractArray{<:ForwardDiff.Dual}, input_length, order)
+function extract_sensitivity_tensors(u0::AbstractArray{<:ForwardDiff.Dual}, input_length, order)
+    real_order = get_order(eltype(u0))
+    order > 0 || error("Expected order > 0, got $(order).")
+    order <= real_order || error("Given state only contains sensitivities of up to order $(real_order), but got $(order).")
+
     output_length = ForwardDiff.npartials(eltype(u0))
 
     tensors = SArray[]
