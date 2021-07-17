@@ -62,13 +62,14 @@ end
     prob = State(system_nbp, SynodicFrame(), u0, (0., 3600.0*24))
 
     # Compute final STM
-    STM_AD = get_sensitivity(AD, prob)
-    STM_FD = get_sensitivity(FD, prob)
+    STM_AD = STM(AD, prob)[end]
+    STM_FD = STM(FD, prob)
     @test STM_AD ≈ STM_FD rtol=1e-5
 
     # Compute STM trace
     STM_AD_trace = solve_sensitivity(AD, prob)
-    @test get_sensitivity(STM_AD_trace, STM_AD_trace.t[end]) ≈ STM_AD rtol=1e-5
+    @test STM(STM_AD_trace[end]) ≈ STM_AD rtol=1e-5
+    @test STM(STM_AD_trace, STM_AD_trace.t[end]) ≈ STM_AD rtol=1e-5
 end
 
 @testset "Higher-order STTs" begin

@@ -49,6 +49,7 @@ end
     # Convert to the desired frame
     return convert_to_frame(traj_vareqns_unconverted, desired_frame)
 end
+solve_sensitivity(::Val{:FiniteDiff}, args...; kwargs...) = error("solve_sensitivity(state) is not defined for FiniteDiff. Call STM(FD, state) instead.")
 
 function stability_index(sol::Union{Trajectory,State})
     hcat(eigvals.(extract_STMs(sol))...)
@@ -132,6 +133,10 @@ StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwarg
 Base.show(io::IO, x::StateTransitionTensor{Order,Size}) where {Order,Size} = print(io, "STT{order=$(Order)}$(tuple(Size.parameters...))")
 Base.show(io::IO, x::StateTransitionMatrix{Size}) where {Size} = print(io, "STM$(tuple(Size.parameters...))")
 
+# Comparison
+Base.isapprox(stt1::StateTransitionTensor{N}, stt2::StateTransitionTensor{N}; kwargs...) where {N} = all(isapprox.(stt1.tensors, stt2.tensors; kwargs...))
+Base.isapprox(stt1::StateTransitionTensor{N}, stt2::StateTransitionTensor{M}; kwargs...) where {N,M} = false
+
 # Generate multiplication functions for STTs up to MAX_STT_ORDER
 #----------------------------------------------------------------
 # Each multiplication function uses Tullio.@tullio to perform a tensor contraction using einstein summation notation,
@@ -185,6 +190,20 @@ function StateTransitionMatrix(sol::Trajectory, t1, t2; kwargs...)
     else
         return StateTransitionMatrix(sol, t2; kwargs...) / StateTransitionMatrix(sol, t1; kwargs...)
     end
+end
+
+# Compute STMs by solving the given state first
+StateTransitionTensor(m::Module, args...; kwargs...) = StateTransitionTensor(Val(first(fullname(m))), args...; kwargs...)
+StateTransitionTensor(v::Val, args...; kwargs...) = StateTransitionTensor(solve_sensitivity(v, args...; kwargs...))
+function StateTransitionTensor(::Val{:FiniteDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...)
+    # NOTE: Only supports order=1
+    tensors = (FiniteDiff.finite_difference_jacobian(state.u0) do u0
+        new_state = remake(state, u0=u0)
+        trajectory = solve(new_state, alg; kwargs...)
+        trajectory_converted = convert_to_frame(trajectory, desired_frame)
+        end_state_u = trajectory_converted.sol[end]
+    end,)
+    StateTransitionTensor(tensors)
 end
 
 recursive_value(val) = val
