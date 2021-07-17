@@ -51,6 +51,8 @@ function CR3BP{handcoded}(props::R3BPSystemProperties) where {handcoded<:Val{tru
 end
 ModelingToolkit.parameters(model::CR3BP{true}) = SVector(model.props.μ)
 
+state_length(::CR3BP{true}) = 6
+
 #---------#
 # METHODS #
 #---------#

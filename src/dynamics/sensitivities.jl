@@ -1,4 +1,4 @@
-export AD, FD, VE, solve_sensitivity, stability_index, has_variational_equations
+export AD, FD, VE, solve_sensitivity
 export StateTransitionMatrix, StateTransitionTensor, STM, STT
 
 #---------------------------#
@@ -51,10 +51,6 @@ end
 end
 solve_sensitivity(::Val{:FiniteDiff}, args...; kwargs...) = error("solve_sensitivity(state) is not defined for FiniteDiff. Call STM(FD, state) instead.")
 
-function stability_index(sol::Union{Trajectory,State})
-    hcat(eigvals.(extract_STMs(sol))...)
-end
-
 #--------------------------------#
 # State Transition Tensors (STT) #
 #--------------------------------#
@@ -86,19 +82,40 @@ struct StateTransitionTensor{Order,Size<:Tuple,TensorsTuple<:Tuple} <: Abstract_
         new{order, Tuple{tensor_size...}, TensorsTuple}(tuple((coeffs .* tensors)...))
     end
 end
+const STT = StateTransitionTensor
 
-# Constructor
+# Constructors
+StateTransitionTensor(m::Module, args...; kwargs...) = StateTransitionTensor(Val(first(fullname(m))), args...; kwargs...)
+StateTransitionTensor(v::Val, args...; order=1, kwargs...) = StateTransitionTensor(solve_sensitivity(v, args...; kwargs...); order)
 
 @doc """ Extracts the State Transition Tensor from the state (solved with solve_sensitivity). """
-function StateTransitionTensor(state::State; order=get_order(eltype(state.u0)))
+function StateTransitionTensor(state::S; order=get_order(eltype(state.u0))) where {S<:State}
     real_order = get_order(eltype(state.u0))
-    order > 0 || error("Expected order > 0, got $(order).")
-    order <= real_order || error("Values in given STT only support order <= $(real_order), got $(order).")
 
-    # TODO: Make this generic (assumes ForwardDiff partials)
+    if real_order == 0 && has_variational_equations(S)
+        # Variational Equations
+        order == 1 || @warn "StateTransitionTensor from Variational Equations currently only supports order=1."
+        tensors = extract_STT(state.u0, state_length(state), 1)
+    else
+        order > 0 || error("Expected order > 0, got $(order).")
+        order <= real_order || error("Values in given STT only support order <= $(real_order), got $(order).")
+        tensors = extract_STT(state.u0, state_length(state), order)
+    end
 
-    input_length = length(state.u0)
-    output_length = ForwardDiff.npartials(eltype(state.u0))
+    return StateTransitionTensor(tensors)
+end
+
+function extract_STT(u0::AbstractArray, input_length, order)
+    # Variational Equations
+    expected_length = input_length^2 + input_length
+    length(u0) == expected_length || error("Unknown sensitivity type, expected $(expected_length) variables but got $(length(u0)).")
+
+    tensor = SMatrix{input_length,input_length}(reshape(u0[input_length+1:end], input_length, input_length))
+    return (tensor,)
+end
+
+function extract_STT(u0::AbstractArray{<:ForwardDiff.Dual}, input_length, order)
+    output_length = ForwardDiff.npartials(eltype(u0))
 
     tensors = SArray[]
     for o in 1:order
@@ -107,7 +124,7 @@ function StateTransitionTensor(state::State; order=get_order(eltype(state.u0)))
         tensor = SArray{Tuple{input_length,output_dims...}}(
             ForwardDiff.value.(
                 ForwardDiff.partials.(
-                    state.u0, 
+                    u0, 
                     ntuple(i -> reshape(1:output_dims[i], (ntuple(x -> 1, i)..., output_dims[i])), o)...
                 )
             )
@@ -115,9 +132,8 @@ function StateTransitionTensor(state::State; order=get_order(eltype(state.u0)))
         
         push!(tensors, tensor)
     end
-    return StateTransitionTensor(tuple(tensors...))
+    return tuple(tensors...)
 end
-const STT = StateTransitionTensor
 
 tensor_order(::Type{<:StateTransitionTensor{Order}}) where {Order} = Order
 tensor_order(stt::StateTransitionTensor) = tensor_order(typeof(stt))
@@ -193,8 +209,6 @@ function StateTransitionMatrix(sol::Trajectory, t1, t2; kwargs...)
 end
 
 # Compute STMs by solving the given state first
-StateTransitionTensor(m::Module, args...; kwargs...) = StateTransitionTensor(Val(first(fullname(m))), args...; kwargs...)
-StateTransitionTensor(v::Val, args...; kwargs...) = StateTransitionTensor(solve_sensitivity(v, args...; kwargs...))
 function StateTransitionTensor(::Val{:FiniteDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...)
     # NOTE: Only supports order=1
     tensors = (FiniteDiff.finite_difference_jacobian(state.u0) do u0
@@ -211,3 +225,5 @@ recursive_value(val::ForwardDiff.Dual) = recursive_value(ForwardDiff.value(val))
 
 get_order(valtype::Type{<:ForwardDiff.Dual}) = 1 + get_order(valtype.parameters[2])
 get_order(::Type{<:Number}) = 0
+
+LinearAlgebra.eigvals(stm::StateTransitionMatrix) = eigvals(Array(stm.tensors[1]))

@@ -89,6 +89,9 @@ ModelingToolkit.get_states(f::Abstract_ModelODEFunctions) = ModelingToolkit.get_
 ModelingToolkit.get_ps(f::Abstract_ModelODEFunctions) = ModelingToolkit.get_ps(f.ode_system)
 Base.nameof(f::Abstract_ModelODEFunctions) = nameof(typeof(f))
 
+state_length(m::Abstract_DynamicalModel) = length(states(m.ode))
+state_length(s::State) = state_length(s.model)
+
 #----------#
 # INCLUDES #
 #----------#

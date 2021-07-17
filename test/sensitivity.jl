@@ -41,16 +41,19 @@ using ForwardDiff
         state_cr3bp_handcoded = State(cr3bp_handcoded, SynodicFrame(), u0, (0., case.t_p))
 
         # Compute STMs
-        STM_AD = get_sensitivity(AD, state_cr3bp)
-        STM_VE = get_sensitivity(VE, state_cr3bp)
-        STM_VE_handcoded = get_sensitivity(VE, state_cr3bp_handcoded)
+        STM_AD = STM(AD, state_cr3bp)
+        STM_VE = STM(VE, state_cr3bp)
+        STM_VE_handcoded = STM(VE, state_cr3bp_handcoded)
+
+        @test STM_AD[end] ≈ STM_VE[end] rtol=1e-5
+        @test STM_VE[end] ≈ STM_VE_handcoded[end] rtol=1e-5
 
         # Compute the maximum eigenvalues
-        λ_max_AD = maximum(norm.(eigvals(Matrix(STM_AD))))
+        λ_max_AD = maximum(norm.(eigvals(STM_AD[end])))
         @test λ_max_AD ≈ case.λ_max rtol=1e-4
-        λ_max_VE = maximum(norm.(eigvals(STM_VE)))
+        λ_max_VE = maximum(norm.(eigvals(STM_VE[end])))
         @test λ_max_VE ≈ case.λ_max rtol=1e-4
-        λ_max_VE_handcoded = maximum(norm.(eigvals(STM_VE_handcoded)))
+        λ_max_VE_handcoded = maximum(norm.(eigvals(STM_VE_handcoded[end])))
         @test λ_max_VE_handcoded ≈ case.λ_max rtol=1e-4
     end
 end
