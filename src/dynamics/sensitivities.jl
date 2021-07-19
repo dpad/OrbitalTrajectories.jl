@@ -209,7 +209,7 @@ end
 StateTransitionTensor(sol::Trajectory, t; kwargs...) = StateTransitionTensor(sol(t); kwargs...)
 
 @doc """ Sensitivity trace of each state (at times t=sol.t) with respect to initial state. """
-StateTransitionTensor(sol::Trajectory; kwargs...) = SVector{length(sol.t)}([StateTransitionTensor(sol[i]; kwargs...) for i in 1:length(sol.t)])
+StateTransitionTensor(sol::Trajectory; kwargs...) = [StateTransitionTensor(sol[i]; kwargs...) for i in 1:length(sol.t)]
 
 @doc """ Sensitivity of the state at time t2 with respect to the state at time t1 <= t2. """
 function StateTransitionMatrix(sol::Trajectory, t1, t2; kwargs...)

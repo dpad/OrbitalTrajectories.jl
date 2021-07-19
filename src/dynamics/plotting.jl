@@ -107,11 +107,6 @@ end
 end
 
 @recipe function f(STMs::AbstractArray{<:STM})
-    label --> ""
-    legend --> false
-    vals = hcat([vec(s[:,:]) for s in STMs]...)'
-    ts = [s.tspan[end] for s in STMs]
-    ts, vals
 end
 
 @recipe function f(sol::Trajectory{<:Abstract_DynamicalModel,<:Abstract_ReferenceFrame,T}) where {T <: ForwardDiff.Dual}
@@ -125,7 +120,12 @@ end
     sol_interpolated = sol(tspan)
 
     if trace_vars
-        STM(sol_interpolated)
+        STMs = STM(sol_interpolated)
+        label --> ""
+        legend --> false
+        # NOTE: Need to convert to Array so this doesn't create a static matrix, which causes unncessary compilation
+        vals = hcat([Array(vec(s.tensors[1])) for s in STMs]...)'
+        tspan, vals
     elseif trace_stability
         stability_indices = norm.(stability_index(sol_interpolated))'
         sorted_indices = hcat(map(sort, eachslice(stability_indices, dims=1))...)[4:6,:]'
