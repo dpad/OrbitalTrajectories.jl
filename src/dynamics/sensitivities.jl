@@ -86,9 +86,15 @@ struct StateTransitionTensor{Order,Size<:Tuple,TensorsTuple<:Tuple} <: Abstract_
 end
 const STT = StateTransitionTensor
 
+# State Transition Matrix
+const StateTransitionMatrix = StateTransitionTensor{1}
+const STM = StateTransitionMatrix
+
 # Constructors
 StateTransitionTensor(m::Module, args...; kwargs...) = StateTransitionTensor(Val(first(fullname(m))), args...; kwargs...)
 StateTransitionTensor(v::Val, args...; kwargs...) = StateTransitionTensor(solve_sensitivity(v, args...; kwargs...))
+
+StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwargs..., order=1)
 
 @doc """ Extracts the State Transition Tensor from the state (solved with solve_sensitivity). """
 function StateTransitionTensor(state::S; order=get_order(eltype(state.u0))) where {S<:State}
@@ -152,11 +158,6 @@ function Base.getindex(stm::StateTransitionMatrix, idx1, idx2)
     StateTransitionTensor(tuple(tensor_views...))
 end
 
-# State Transition Matrix
-const StateTransitionMatrix = StateTransitionTensor{1}
-const STM = StateTransitionMatrix
-StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwargs..., order=1)
-
 # Display
 Base.show(io::IO, x::StateTransitionTensor{Order,Size}) where {Order,Size} = print(io, "STT{order=$(Order)}$(tuple(Size.parameters...))")
 Base.show(io::IO, x::StateTransitionMatrix{Size}) where {Size} = print(io, "STM$(tuple(Size.parameters...))")
@@ -216,7 +217,7 @@ function StateTransitionMatrix(sol::Trajectory, t1, t2; kwargs...)
     if t2 == t1
         return Matrix(1.0 * I, 6, 6)  # TODO: Make this type and size-generic, static
     else
-        return StateTransitionMatrix(sol, t2; kwargs...) / StateTransitionMatrix(sol, t1; kwargs...)
+        return StateTransitionMatrix(sol, t2; kwargs...).tensors[1] / StateTransitionMatrix(sol, t1; kwargs...).tensors[1]
     end
 end
 
