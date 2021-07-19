@@ -80,9 +80,8 @@ struct StateTransitionTensor{Order,Size<:Tuple,TensorsTuple<:Tuple} <: Abstract_
 
     function StateTransitionTensor(tensors::TensorsTuple) where {TensorsTuple<:Tuple}
         order = length(tensors)
-        coeffs = [1 / factorial(i) for i in 1:order]
         tensor_size = size(tensors[1])
-        new{order, Tuple{tensor_size...}, TensorsTuple}(tuple((coeffs .* tensors)...))
+        new{order, Tuple{tensor_size...}, TensorsTuple}(tensors)
     end
 end
 const STT = StateTransitionTensor
@@ -128,7 +127,8 @@ function extract_sensitivity_tensors(u0::AbstractArray{<:ForwardDiff.Dual}, inpu
             )
         )
         
-        push!(tensors, tensor)
+        coeff = 1 / factorial(order)
+        push!(tensors, coeff .* tensor)
     end
     return tuple(tensors...)
 end
@@ -137,6 +137,20 @@ tensor_order(::Type{<:StateTransitionTensor{Order}}) where {Order} = Order
 tensor_order(stt::StateTransitionTensor) = tensor_order(typeof(stt))
 tensor_size(::Type{<:StateTransitionTensor{Order,Size}}) where {Order,Size} = tuple(Size.parameters...)
 tensor_size(stt::StateTransitionTensor{Order,Size}) where {Order,Size} = tensor_size(typeof(stt))
+
+# Define subsets of STTs
+Base.axes(::StateTransitionTensor{O,Size}) where {O,Size} = tuple(SOneTo.(Size.parameters)...)
+Base.axes(::StateTransitionTensor{O,Size}, i) where {O,Size} = SOneTo.(Size.parameters[i])
+
+# Define subsets of STMs
+Broadcast.broadcastable(stm::StateTransitionMatrix) = stm.tensors[1]
+Base.length(stm::StateTransitionMatrix) = length(stm.tensors[1])
+Base.iterate(stm::StateTransitionMatrix, args...) = iterate(stm.tensors[1], args...)
+function Base.getindex(stm::StateTransitionMatrix, idx1, idx2)
+    # TODO: Ensure this is a matrix or array of size = length(idx1), length(idx2), ...
+    tensor_views = [view(tensor, idx1, idx2) for tensor in stm.tensors]
+    StateTransitionTensor(tuple(tensor_views...))
+end
 
 # State Transition Matrix
 const StateTransitionMatrix = StateTransitionTensor{1}
