@@ -107,7 +107,7 @@ function extract_sensitivity_tensors(u0::AbstractArray, input_length, order)
 
     # Variational Equations
     expected_length = input_length^2 + input_length
-    length(u0) == expected_length || error("Unknown sensitivity type, expected $(expected_length) variables but got $(length(u0)).")
+    length(u0) == expected_length || error("Unknown sensitivity type, expected $(expected_length) variables but found $(length(u0)).")
 
     tensor = SMatrix{input_length,input_length}(reshape(u0[input_length+1:end], input_length, input_length))
     return (tensor,)
@@ -217,7 +217,7 @@ function StateTransitionMatrix(sol::Trajectory, t1, t2; kwargs...)
     if t2 == t1
         return Matrix(1.0 * I, 6, 6)  # TODO: Make this type and size-generic, static
     else
-        return StateTransitionMatrix(sol, t2; kwargs...).tensors[1] / StateTransitionMatrix(sol, t1; kwargs...).tensors[1]
+        return StateTransitionMatrix(sol, t2; kwargs...).tensors[1] * inv(StateTransitionMatrix(sol, t1; kwargs...).tensors[1])
     end
 end
 
