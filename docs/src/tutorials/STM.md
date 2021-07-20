@@ -93,7 +93,7 @@ how to use the Automatic Differentiation (AD) method to compute and plot the STM
 
 ```@example 1
 # Compute the STM at the final point of the trajectory (with respect to initial state)
-STM = sensitivity(AD, state)
+STM = get_sensitivity(AD, state)
 ```
 
 We can check that the stability index (maximum eigenvalue) matches the value from the paper.[^Pellegrini2016]
@@ -109,7 +109,7 @@ interpolatable at any point.
 
 ```@example 1
 # Compute the STM trace (i.e. the STM at every point along the trajectory)
-STM_trace = sensitivity_trace(AD, state)
+STM_trace = solve_sensitivity(AD, state)
 
 # Plot the STM elements
 plot(STM_trace; trace=true)
@@ -186,8 +186,8 @@ for (j, case) in enumerate(test_cases)
             origin_secondary=false, case.plot_args..., plot_attrs...)
 
         # Build trace using Variational Equations (VE)
-        if has_variational_equations(typeof(state))
-            traj_VE = sensitivity_trace(VE, state, frame)
+        if supports_sensitivity_variational_equations(typeof(state))
+            traj_VE = solve_sensitivity(VE, state, frame)
             VE_label = " & VE"
 
             # Extract the sensitivities
@@ -204,14 +204,14 @@ for (j, case) in enumerate(test_cases)
         VE_label = isa(system, CR3BP{false}) ? "$(VE_label) & hand-coded" : VE_label
 
         # Build trace using Automatic Differentiation (AD)
-        traj_AD = sensitivity_trace(AD, state, frame)
+        traj_AD = solve_sensitivity(AD, state, frame)
         !isa(system, CR3BP{true}) && plot!(p_traces[end], traj_AD, frame; trace_stability=true, label="$(sys_name) (AD$(VE_label))", color,
             link=:y, yscale=:log10, ylabel=(j == 1) ? L"$\lambda_{\max}(\textrm{STM})$" : "", ytickfontcolor=(j == 1) ? RGBA(0,0,0,1) : RGBA(0,0,0,0),
             ytickfontsize=(j == 1) ? 8 : 0, ygrid=true, legend=(j==1) ? :topleft : false, alpha, plot_attrs...)
         j == 2 && plot!(p_traces[end]; xlabel="Time (normalised to 1 period)")
         
         # Build trace using Finite Differencing (FD)
-        STM_FD = Matrix(sensitivity(FD, state, frame))
+        STM_FD = Matrix(get_sensitivity(FD, state, frame))
         λ_max_FD = maximum(norm.(eigvals(STM_FD)))
         isa(system, CR3BP{false}) && scatter!(p_traces[end], [1.], [λ_max_FD]; color=:black, markersize=6, markerstrokewidth=0, markershape=:star5, 
             label=L"$\lambda_{\max,\textrm{end}}\;\textrm{(FD)}$")

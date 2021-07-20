@@ -57,7 +57,7 @@ has_jacobian(X::Type{<:DiffEqBase.ODEFunction}) = !isnothing(fieldtype(X, :jac))
     # The State Transition Matrix (STM) ODE function is defined as follows, including the N^2 Jacobian equations +
     # the N first-order equations of motion. [Koon 2011]
     # NOTE: the Differential is defined element-wise and flattened to a list.
-    stm_eqs = simplify.(D.(ϕ) .~ A * ϕ)
+    stm_eqs = collect(simplify.(D.(ϕ) .~ A * ϕ))
 
     # Create the ODE system and generate its functions
     stm_ode = ODESystem(
@@ -88,6 +88,9 @@ ModelingToolkit.get_eqs(f::Abstract_ModelODEFunctions) = ModelingToolkit.get_eqs
 ModelingToolkit.get_states(f::Abstract_ModelODEFunctions) = ModelingToolkit.get_states(f.ode_system)
 ModelingToolkit.get_ps(f::Abstract_ModelODEFunctions) = ModelingToolkit.get_ps(f.ode_system)
 Base.nameof(f::Abstract_ModelODEFunctions) = nameof(typeof(f))
+
+state_length(m::Abstract_DynamicalModel) = length(states(m.ode))
+state_length(s::State) = state_length(s.model)
 
 #----------#
 # INCLUDES #
