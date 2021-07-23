@@ -87,9 +87,17 @@ end
 
         # Plot the trajectory
         vars --> (1, 2)  # (x, y)
-        denseplot --> get(plotattributes, :denseplot, true)
+        denseplot = get(plotattributes, :denseplot, true)
+        denseplot --> denseplot
 
-        xlim, ylim = get_margin_lims(sol, plotattributes)
+        sol_interpolated = sol
+        if denseplot
+            plotdensity = get(plotattributes, :plotdensity, 1000)
+            tspan = range(sol.t[begin], sol.t[end], length=plotdensity)
+            sol_interpolated = sol(tspan)
+        end
+
+        xlim, ylim = get_margin_lims(sol_interpolated, plotattributes)
         xlims --> xlim
         ylims --> ylim
         
@@ -150,7 +158,7 @@ end
         end
 
         # Plot the trajectory
-        xlim, ylim = get_margin_lims(sol, plotattributes)
+        xlim, ylim = get_margin_lims(sol_interpolated, plotattributes)
         xlims --> xlim
         ylims --> ylim
         
