@@ -173,37 +173,48 @@ Base.isapprox(stt1::StateTransitionTensor{N}, stt2::StateTransitionTensor{M}; kw
 # XXX: I tried doing this with @generated functions, but it seems that the @tullio macro creates closures, meaning
 # it can't be used in the output of an @generated function.
 const MAX_STT_ORDER = 4
-for STT_ORDER in 1:MAX_STT_ORDER
-    exprs = []
-    for order in 1:STT_ORDER
+let exprs = []
+    for STT_ORDER in 1:MAX_STT_ORDER
         # The ith-order STT should be contracted with i variables.
         # For example, an STM (order=1) is DX[i] = STM[i,j] * dx[j]
         # But an STT(order=2) is DX[i] = STM[i,j,k] * dx[j] * dx[k]
         #
         # Here, we generate an automatic list of indices (e.g. (j, k)), and from
         # that a list of [dx[j], dx[k]...].
-        tensor_indices = [gensym() for _ in 2:(order+1)]
-        dxs = [:(dx[$(tensor_indices[i])]) for i in 1:order]
+        tensor_indices = [gensym() for _ in 2:(STT_ORDER+1)]
+        dxs = [:(dx[$(tensor_indices[i])]) for i in 1:STT_ORDER]
 
         push!(exprs, quote
-            tensor = stt.tensors[$(order)]
+            tensor = stt.tensors[$(STT_ORDER)]
             @tullio DX[i] += tensor[i,$(tensor_indices...)] * *($(dxs...))
         end)
+        eval(quote
+            # Create a function specialised to the specific STT order.
+            function (Base.:*)(stt::StateTransitionTensor{$(STT_ORDER)}, dx::AbstractVector)
+                DX = zeros(eltype(stt.tensors[1]), tensor_size(stt)[1])
+                $(exprs...)
+                DX
+            end
+        end)
     end
-    eval(quote
-        # Create a function specialised to the specific STT order.
-        function (Base.:*)(stt::StateTransitionTensor{$(STT_ORDER)}, dx::AbstractVector)
-            DX = zeros(eltype(stt.tensors[1]), tensor_size(stt)[1])
-            $(exprs...)
-            DX
-        end
-    end)
+end
+
+function (Base.inv)(stm::StateTransitionMatrix)
+    StateTransitionTensor((inv(stm.tensors[1]),))
+end
+
+function (Base.:*)(stm1::StateTransitionMatrix, stm2::StateTransitionMatrix)
+    tensor1 = stm1.tensors[1]
+    tensor2 = stm2.tensors[1]
+    new_tensor = similar(tensor1)
+    @tullio new_tensor[i,a] = tensor1[i,alpha] * tensor2[alpha,a]
+    StateTransitionTensor((new_tensor,))
 end
 
 # STTs of orders not generated above are not supported automatically. Users
 # should define their contractions manually. (I wanted to do this completely
 # automatically but haven't been able to yet.)
-(Base.:*)(::StateTransitionTensor{Order}, _) where {Order} = error("Multiplication for STT of order $(Order) not defined, please write it yourself!")
+(Base.:*)(::StateTransitionTensor{Order}, _) where {Order} = error("Multiplication for STTs is only defined up to order $(MAX_STT_ORDER), got order $(Order). Please define the multiplication manually.")
 
 @doc """ Sensitivity of the interpolated states (at times t) with respect to initial state. """
 StateTransitionTensor(sol::Trajectory, t; kwargs...) = StateTransitionTensor(sol(t); kwargs...)
@@ -214,10 +225,15 @@ StateTransitionTensor(sol::Trajectory; kwargs...) = [StateTransitionTensor(sol[i
 @doc """ Sensitivity of the state at time t2 with respect to the state at time t1 <= t2. """
 function StateTransitionMatrix(sol::Trajectory, t1, t2; kwargs...)
     @assert t1 <= t2  "Expected t1 <= t2"
-    if t2 == t1
-        return Matrix(1.0 * I, 6, 6)  # TODO: Make this type and size-generic, static
+    if t1 == t2
+        sol0 = sol[begin]
+        input_length = state_length(sol0)
+        output_length = ForwardDiff.npartials(eltype(sol0.u0))  # TODO: Make generic
+        return StateTransitionTensor((SMatrix{input_length, output_length}(1.0 * I),))
+    elseif t1 == sol.t[begin]
+        return StateTransitionMatrix(sol, t2; kwargs...)
     else
-        return StateTransitionMatrix(sol, t2; kwargs...).tensors[1] * inv(StateTransitionMatrix(sol, t1; kwargs...).tensors[1])
+        return StateTransitionMatrix(sol, t2; kwargs...) * inv(StateTransitionMatrix(sol, t1; kwargs...))
     end
 end
 
