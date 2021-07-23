@@ -203,6 +203,13 @@ function (Base.inv)(stm::StateTransitionMatrix)
     StateTransitionTensor((inv(stm.tensors[1]),))
 end
 
+# Multiplication of STMs.
+# TODO: Need a much better explanation of this.
+# NOTE: Assumes that the timespan represented by each STM is non-overlapping but
+# continuous over a full time interval of [t_0, t_f], such that:
+# -- STM1 represents a time interval [t_k, t_f]
+# -- STM2 represents a time interval [t_0, t_k]
+# -- (STM1 * STM2) results in the STM for the time interval [t_0, t_f]
 function (Base.:*)(stm1::StateTransitionMatrix, stm2::StateTransitionMatrix)
     tensor1 = stm1.tensors[1]
     tensor2 = stm2.tensors[1]
