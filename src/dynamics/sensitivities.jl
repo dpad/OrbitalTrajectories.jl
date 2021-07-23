@@ -133,8 +133,7 @@ function extract_sensitivity_tensors(u0::AbstractArray{<:ForwardDiff.Dual}, inpu
             )
         )
         
-        coeff = 1 / factorial(order)
-        push!(tensors, coeff .* tensor)
+        push!(tensors, tensor)
     end
     return tuple(tensors...)
 end
@@ -186,7 +185,8 @@ let exprs = []
 
         push!(exprs, quote
             tensor = stt.tensors[$(STT_ORDER)]
-            @tullio DX[i] += tensor[i,$(tensor_indices...)] * *($(dxs...))
+            coeff = $(1 / factorial(STT_ORDER))
+            @tullio DX[i] += coeff * tensor[i,$(tensor_indices...)] * *($(dxs...))
         end)
         eval(quote
             # Create a function specialised to the specific STT order.
@@ -209,6 +209,22 @@ function (Base.:*)(stm1::StateTransitionMatrix, stm2::StateTransitionMatrix)
     new_tensor = similar(tensor1)
     @tullio new_tensor[i,a] = tensor1[i,alpha] * tensor2[alpha,a]
     StateTransitionTensor((new_tensor,))
+end
+
+function (Base.:*)(stt1::S, stt2::S) where {S<:StateTransitionTensor{2}}
+    # 1st order
+    tensor1 = stt1.tensors[1]
+    tensor2 = stt2.tensors[1]
+    new_tensor1 = similar(tensor1)
+    @tullio new_tensor1[i,a] = tensor1[i,alpha] * tensor2[alpha,a]
+
+    # 2nd order
+    tensor1_2 = stt1.tensors[2]
+    tensor2_2 = stt2.tensors[2]
+    new_tensor2 = similar(tensor1_2)
+    @tullio new_tensor2[i,a,b] = tensor1[i,alpha] * tensor2_2[alpha,a,b] + tensor1_2[i,alpha,beta] * tensor2[alpha,a] * tensor2[beta,b]
+
+    StateTransitionTensor((new_tensor1, new_tensor2))
 end
 
 # STTs of orders not generated above are not supported automatically. Users
