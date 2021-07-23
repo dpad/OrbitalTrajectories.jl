@@ -23,7 +23,7 @@ struct Trajectory{M<:Abstract_DynamicalModel,F<:Abstract_ReferenceFrame,T,N,A,O<
     sol :: O
 end
 
-State(traj::Trajectory) = State(traj.model, traj.frame, traj.sol.prob)
+State(traj::Trajectory) = State(traj.model, traj.frame, traj.u[begin], (traj.t[begin], traj.t[end]))
 
 primary_body(state::State) = primary_body(state.model)
 primary_body(traj::Trajectory) = primary_body(traj.model)
