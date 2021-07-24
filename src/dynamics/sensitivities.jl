@@ -60,8 +60,8 @@ solve_sensitivity(::Val{:FiniteDiff}, args...; kwargs...) = error("solve_sensiti
 # An STT represents the sensitivities of a set of output functions with respect
 # to some input variables (around some reference point).
 struct StateTransitionTensor{Order,TensorsTuple<:Tuple{Vararg{<:TensorMap,Order}}} <: Abstract_StateTransitionTensor{Order}
-    tspan::NTuple{2,Float64}  # The timespan represented by the STT.
-    tensors::TensorsTuple     # tensors[i] holds the ith-order tensor.
+    t::Float64             # The time represented by the STT -- NOTE: we do not necessarily know the reference time.
+    tensors::TensorsTuple  # tensors[i] holds the ith-order tensor.
 end
 const STT = StateTransitionTensor
 
@@ -71,10 +71,11 @@ const STM = StateTransitionMatrix
 
 # Constructors
 @doc """ Extracts the State Transition Tensor from the state (solved with solve_sensitivity). """
-function StateTransitionTensor(state::S, tspan; order=get_order(eltype(state.u0))) where {S<:State}
+function StateTransitionTensor(state::State, t; order=get_order(eltype(state.u0)))
     tensors = extract_sensitivity_tensors(state.u0, state_length(state), order)
-    return StateTransitionTensor(recursive_value.(tspan), tensors)
+    return StateTransitionTensor(recursive_value(t), tensors)
 end
+StateTransitionTensor(state::State; kwargs...) = StateTransitionTensor(state, state.tspan[begin]; kwargs...)
 StateTransitionTensor(m::Module, args...; kwargs...) = StateTransitionTensor(Val(first(fullname(m))), args...; kwargs...)
 StateTransitionTensor(v::Val, args...; kwargs...) = StateTransitionTensor(solve_sensitivity(v, args...; kwargs...))
 StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwargs..., order=1)
@@ -110,7 +111,7 @@ function extract_sensitivity_tensors(u0::AbstractArray{DualType}, codomain_lengt
                     u0, 
                     ntuple(i -> reshape(1:input_dims[i], (ntuple(x -> 1, i)..., input_dims[i])), o)...
                 )
-            ), ℝ^codomain_length, ⊗([ℝ^domain_length for _ in 1:o]...)
+            ), ⊗([ℝ^domain_length for _ in 1:o]...) → ℝ^codomain_length
         )
         
         push!(tensors, tensor)
@@ -123,23 +124,45 @@ TensorKit.numin(dualType::Type{<:ForwardDiff.Dual}) = ForwardDiff.npartials(dual
 tensor_order(::Type{<:StateTransitionTensor{Order}}) where {Order} = Order
 tensor_order(stt::StateTransitionTensor) = tensor_order(typeof(stt))
 
-# Define subsets of STTs
-# Base.axes(::StateTransitionTensor{O,Tuple{TensorMap{S,Out,In}}}) where {O,S,Out,In} = tuple(SOneTo(Out), SOneTo(In))
-# Base.axes(stt::StateTransitionTensor, i) = axes(stt)[i]
+# Define STT axes as (Out, In) dimensions.
+# NOTE: We use only the 1st-order tensor, because we don't want to subset on higher-orders.
+Base.axes(stt::StateTransitionTensor) = tuple(SOneTo.(dim.([codomain(stt.tensors[1])..., domain(stt.tensors[1])...]))...)
+Base.axes(stt::StateTransitionTensor, i) = axes(stt)[i]
 
-# # Define subsets of STMs
-# Broadcast.broadcastable(stm::StateTransitionMatrix) = stm.tensors[1]
+# Make STMs (1st-order only) broadcastable
+Broadcast.broadcastable(stm::StateTransitionMatrix) = convert(Array, stm.tensors[1])
+
 # Base.length(stm::StateTransitionMatrix) = length(stm.tensors[1])
 # Base.iterate(stm::StateTransitionMatrix, args...) = iterate(stm.tensors[1], args...)
-# function Base.getindex(stm::StateTransitionMatrix, idx1, idx2)
-#     # TODO: Ensure this is a matrix or array of size = length(idx1), length(idx2), ...
-#     tensor_views = [view(tensor, idx1, idx2) for tensor in stm.tensors]
-#     StateTransitionTensor(tuple(tensor_views...))
-# end
+
+# Define subsets of STTs.
+# We only subset on the (Out, In) dimensions (i.e. up to 1st-order)
+Base.getindex(stm::StateTransitionTensor, domain_to_codomain::Pair) = stm[domain_to_codomain[2], domain_to_codomain[1]]
+function Base.getindex(stm::StateTransitionTensor, codomain_idx, domain_idx)
+    # Work out size of the newly-indexed codomain and domain. Need this to avoid:
+    # 1) scalar indices, which will cause a dimension to be dropped
+    # 2) Colon() indices, which have unknown size without context
+    tensor_axes = axes(stm)  # Original tensor axes (to give context)
+    codomain_size, domain_size = @. length(getindex(tensor_axes, (codomain_idx, domain_idx)))
+
+    # Create the vector space based on the above sizes
+    codomain_dim, domain_dim = (ℝ^codomain_size, ℝ^domain_size)
+
+    new_tensors = []
+    for tensor in stm.tensors
+        tensor_array = convert(Array, tensor)[codomain_idx, domain_idx]
+        tensor_map = TensorMap(
+            collect(tensor_array), # XXX: Need the collect() to avoid scalars when the dims are (1, 1)
+            ⊗([domain_dim for _ in 1:numin(tensor)]...) → codomain_dim
+        )
+        push!(new_tensors, tensor_map)
+    end
+    StateTransitionTensor(stm.t, tuple(new_tensors...))
+end
 
 # Display
-Base.show(io::IO, x::StateTransitionTensor{Order}) where {Order} = print(io, string(SciMLBase.TYPE_COLOR, "STT", SciMLBase.NO_COLOR, "($(space(x.tensors[end])), t=$(x.tspan))"))
-Base.show(io::IO, x::StateTransitionMatrix) = print(io, string(SciMLBase.TYPE_COLOR, "STM", SciMLBase.NO_COLOR, "($(space(x.tensors[end])), t=$(x.tspan))"))
+Base.show(io::IO, x::StateTransitionTensor{Order}) where {Order} = print(io, string(SciMLBase.TYPE_COLOR, "STT", SciMLBase.NO_COLOR, "($(space(x.tensors[end])), t=$(x.t))"))
+Base.show(io::IO, x::StateTransitionMatrix) = print(io, string(SciMLBase.TYPE_COLOR, "STM", SciMLBase.NO_COLOR, "($(space(x.tensors[end])), t=$(x.t))"))
 
 # Comparison
 # Base.isapprox(stt1::StateTransitionTensor{N}, stt2::StateTransitionTensor{N}; kwargs...) where {N} = all(isapprox.(stt1.tensors, stt2.tensors; kwargs...))
@@ -179,15 +202,15 @@ Base.show(io::IO, x::StateTransitionMatrix) = print(io, string(SciMLBase.TYPE_CO
     return quote
         RES = Tensor(zeros, domain(STT.tensors[1]))
         $(exprs...)
-        return RES
+        return convert(Array, RES)
     end
 end
 
-(Base.:*)(stt::StateTransitionTensor, dx::AbstractVector) = stt * Tensor(dx, domain(stt.tensors[1]))
+# (Base.:*)(coeff::Number, stt::StateTransitionTensor) = StateTransitionTensor(stt.)
+(Base.:*)(stt::StateTransitionTensor, dx) = stt * Tensor(collect(dx), domain(stt.tensors[1]))
 
-# function (Base.inv)(stm::StateTransitionMatrix)
-#     StateTransitionTensor((inv(stm.tensors[1]),))
-# end
+# Inverses
+(Base.inv)(stm::StateTransitionMatrix) = StateTransitionTensor(stm.t, (inv(stm.tensors[1]),))
 
 # Multiplication of STMs.
 # TODO: Need a much better explanation of this.
@@ -226,10 +249,11 @@ end
 # (Base.:*)(::StateTransitionTensor{Order}, _) where {Order} = error("Multiplication for STTs is only defined up to order $(MAX_STT_ORDER), got order $(Order). Please define the multiplication manually.")
 
 @doc """ Sensitivity of the interpolated states (at times t) with respect to initial state. """
-StateTransitionTensor(sol::Trajectory, t; kwargs...) = StateTransitionTensor(sol(t), (sol.t[begin], t); kwargs...)
+StateTransitionTensor(sol::Trajectory, t; kwargs...) = StateTransitionTensor(sol(t); kwargs...)
+StateTransitionTensor(sol::Trajectory, t::Number; kwargs...) = StateTransitionTensor(sol(t), t; kwargs...)
 
 @doc """ Sensitivity trace of each state (at times t=sol.t) with respect to initial state. """
-StateTransitionTensor(sol::Trajectory; kwargs...) = [StateTransitionTensor(sol[i], (sol.t[begin], sol.t[i]); kwargs...) for i in 1:length(sol.t)]
+StateTransitionTensor(sol::Trajectory; kwargs...) = [StateTransitionTensor(sol[i], sol.t[i]; kwargs...) for i in 1:length(sol.t)]
 
 # @doc """ Sensitivity of the state at time t2 with respect to the state at time t1 <= t2. """
 # function StateTransitionMatrix(sol::Trajectory, t1, t2; kwargs...)
