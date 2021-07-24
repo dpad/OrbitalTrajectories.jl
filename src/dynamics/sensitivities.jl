@@ -59,9 +59,9 @@ solve_sensitivity(::Val{:FiniteDiff}, args...; kwargs...) = error("solve_sensiti
 #--------------------------------#
 # An STT represents the sensitivities of a set of output functions with respect
 # to some input variables (around some reference point).
-struct StateTransitionTensor{Order,TensorsTuple<:Tuple{Vararg{<:TensorMap,Order}}} <: Abstract_StateTransitionTensor{Order}
-    t::Float64             # The time represented by the STT -- NOTE: we do not necessarily know the reference time.
-    tensors::TensorsTuple  # tensors[i] holds the ith-order tensor.
+struct StateTransitionTensor{Order,TensorsTuple<:Tuple{Vararg{<:AbstractTensorMap,Order}}} <: Abstract_StateTransitionTensor{Order}
+    tspan::NTuple{2,Float64}  # The timespan represented by the STT.
+    tensors::TensorsTuple     # tensors[i] holds the ith-order tensor.
 end
 const STT = StateTransitionTensor
 
@@ -71,9 +71,9 @@ const STM = StateTransitionMatrix
 
 # Constructors
 @doc """ Extracts the State Transition Tensor from the state (solved with solve_sensitivity). """
-function StateTransitionTensor(state::State, t; order=get_order(eltype(state.u0)))
+function StateTransitionTensor(state::State, tspan; order=get_order(eltype(state.u0)))
     tensors = extract_sensitivity_tensors(state.u0, state_length(state), order)
-    return StateTransitionTensor(recursive_value(t), tensors)
+    return StateTransitionTensor(recursive_value.(tspan), tensors)
 end
 StateTransitionTensor(state::State; kwargs...) = StateTransitionTensor(state, state.tspan[begin]; kwargs...)
 StateTransitionTensor(m::Module, args...; kwargs...) = StateTransitionTensor(Val(first(fullname(m))), args...; kwargs...)
@@ -157,12 +157,12 @@ function Base.getindex(stm::StateTransitionTensor, codomain_idx, domain_idx)
         )
         push!(new_tensors, tensor_map)
     end
-    StateTransitionTensor(stm.t, tuple(new_tensors...))
+    StateTransitionTensor(stm.tspan, tuple(new_tensors...))
 end
 
 # Display
-Base.show(io::IO, x::StateTransitionTensor{Order}) where {Order} = print(io, string(SciMLBase.TYPE_COLOR, "STT", SciMLBase.NO_COLOR, "($(space(x.tensors[end])), t=$(x.t))"))
-Base.show(io::IO, x::StateTransitionMatrix) = print(io, string(SciMLBase.TYPE_COLOR, "STM", SciMLBase.NO_COLOR, "($(space(x.tensors[end])), t=$(x.t))"))
+Base.show(io::IO, x::StateTransitionTensor{Order}) where {Order} = print(io, string(SciMLBase.TYPE_COLOR, "STT", SciMLBase.NO_COLOR, "($(space(x.tensors[end])), t=$(x.tspan))"))
+Base.show(io::IO, x::StateTransitionMatrix) = print(io, string(SciMLBase.TYPE_COLOR, "STM", SciMLBase.NO_COLOR, "($(space(x.tensors[end])), t=$(x.tspan))"))
 
 # Comparison
 # Base.isapprox(stt1::StateTransitionTensor{N}, stt2::StateTransitionTensor{N}; kwargs...) where {N} = all(isapprox.(stt1.tensors, stt2.tensors; kwargs...))
@@ -172,7 +172,7 @@ Base.show(io::IO, x::StateTransitionMatrix) = print(io, string(SciMLBase.TYPE_CO
 #----------------------------------------------------------------
 # Each multiplication function uses Tullio.@tullio to perform a tensor contraction using einstein summation notation,
 # contracting each tensor in STT.tensors with the appropriate number of vector values.
-@generated function (Base.:*)(STT::StateTransitionTensor{Order}, DX::Tensor) where {Order}
+@generated function (Base.:*)(STT::StateTransitionTensor{Order}, DX::AbstractTensor) where {Order}
     # The ith-order STT should be contracted with i variables.
     # For example, an STM (order=1) is DX[i] = STM[i,j] * dx[j]
     # But an STT(order=2) is DX[i] = STM[i,j,k] * dx[j] * dx[k]
@@ -202,15 +202,40 @@ Base.show(io::IO, x::StateTransitionMatrix) = print(io, string(SciMLBase.TYPE_CO
     return quote
         RES = Tensor(zeros, domain(STT.tensors[1]))
         $(exprs...)
-        return convert(Array, RES)
+        return RES
     end
 end
 
-# (Base.:*)(coeff::Number, stt::StateTransitionTensor) = StateTransitionTensor(stt.)
+(Base.:*)(coeff::Number, stt::StateTransitionTensor) = StateTransitionTensor(stt.tspan, coeff .* stt.tensors)
 (Base.:*)(stt::StateTransitionTensor, dx) = stt * Tensor(collect(dx), domain(stt.tensors[1]))
+function (Base.:*)(stt1::StateTransitionTensor, stt2::StateTransitionTensor)
+    # Multiply together all the tensors and fix up the corresponding timespan
+    return StateTransitionTensor((stt2.tspan[1], stt1.tspan[2]), stt1.tensors .* stt2.tensors)
+end
 
-# Inverses
-(Base.inv)(stm::StateTransitionMatrix) = StateTransitionTensor(stm.t, (inv(stm.tensors[1]),))
+# Solving linear equation
+(Base.:\)(stt::StateTransitionTensor, dx) = inv(stt) * dx
+
+# Arithmetic
+function (Base.:+)(stt1::S, stt2::S) where {S<:StateTransitionTensor}
+    # TODO: What do we do about tspans?
+    StateTransitionTensor(stt1.tspan, stt1.tensors .+ stt2.tensors)
+end
+function (Base.:-)(stt1::S, stt2::S) where {S<:StateTransitionTensor}
+    # TODO: What do we do about tspans?
+    StateTransitionTensor(stt1.tspan, stt1.tensors .- stt2.tensors)
+end
+function (Base.:-)(stt1::StateTransitionTensor)
+    # TODO: What do we do about tspans?
+    StateTransitionTensor(stt1.tspan, (-).(stt1.tensors))
+end
+
+# Custom constructors
+(Base.one)(stm::StateTransitionMatrix) = StateTransitionTensor(stm.tspan, one.(stm.tensors))
+
+# Inverses and adjoints
+(Base.inv)(stm::StateTransitionMatrix) = StateTransitionTensor((stm.tspan[2], stm.tspan[1]), inv.(stm.tensors))
+(Base.adjoint)(stm::StateTransitionMatrix) = StateTransitionTensor(stm.tspan, adjoint.(stm.tensors))
 
 # Multiplication of STMs.
 # TODO: Need a much better explanation of this.
@@ -250,25 +275,23 @@ end
 
 @doc """ Sensitivity of the interpolated states (at times t) with respect to initial state. """
 StateTransitionTensor(sol::Trajectory, t; kwargs...) = StateTransitionTensor(sol(t); kwargs...)
-StateTransitionTensor(sol::Trajectory, t::Number; kwargs...) = StateTransitionTensor(sol(t), t; kwargs...)
+StateTransitionTensor(sol::Trajectory, t::Number; kwargs...) = StateTransitionTensor(sol(t), (sol.t[begin], t); kwargs...)
 
 @doc """ Sensitivity trace of each state (at times t=sol.t) with respect to initial state. """
-StateTransitionTensor(sol::Trajectory; kwargs...) = [StateTransitionTensor(sol[i], sol.t[i]; kwargs...) for i in 1:length(sol.t)]
+StateTransitionTensor(sol::Trajectory; kwargs...) = [StateTransitionTensor(sol[i], (sol.t[begin], sol.t[i]); kwargs...) for i in 1:length(sol.t)]
 
-# @doc """ Sensitivity of the state at time t2 with respect to the state at time t1 <= t2. """
-# function StateTransitionMatrix(sol::Trajectory, t1, t2; kwargs...)
-#     @assert t1 <= t2  "Expected t1 <= t2"
-#     if t1 == t2
-#         sol0 = sol[begin]
-#         input_length = state_length(sol0)
-#         output_length = ForwardDiff.npartials(eltype(sol0.u0))  # TODO: Make generic
-#         return StateTransitionTensor((SMatrix{input_length, output_length}(1.0 * I),))
-#     elseif t1 == sol.t[begin]
-#         return StateTransitionMatrix(sol, t2; kwargs...)
-#     else
-#         return StateTransitionMatrix(sol, t2; kwargs...) * inv(StateTransitionMatrix(sol, t1; kwargs...))
-#     end
-# end
+@doc """ Sensitivity of the state at time t2 with respect to the state at time t1 <= t2. """
+function StateTransitionMatrix(sol::Trajectory, t1, t2; kwargs...)
+    @assert t1 <= t2  "Expected t1 <= t2"
+    if t1 == t2
+        real_STM = STM(sol, t1)
+        return StateTransitionTensor(real_STM.tspan, one.(real_STM.tensors))
+    elseif t1 == sol.t[begin]
+        return StateTransitionMatrix(sol, t2; kwargs...)
+    else
+        return StateTransitionMatrix(sol, t2; kwargs...) * inv(StateTransitionMatrix(sol, t1; kwargs...))
+    end
+end
 
 # Compute STMs by solving the given state first
 # function StateTransitionTensor(::Val{:FiniteDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...)
