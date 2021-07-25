@@ -1,6 +1,5 @@
 module Dynamics
-    using SciMLBase: SciMLAlgorithm
-using OrbitalTrajectories.SpiceUtils
+    using OrbitalTrajectories.SpiceUtils
 
     using DiffEqBase
     using DiffEqSensitivity
@@ -21,7 +20,7 @@ using OrbitalTrajectories.SpiceUtils
     using SimpleTraits
     using SPICE
     using StaticArrays
-    using TensorKit
+    using Tullio
     using Unitful
 
     # Required to ensure that we can precompile ODEFunctions (which needs to be
