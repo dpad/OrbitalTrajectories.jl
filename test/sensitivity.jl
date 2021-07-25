@@ -14,19 +14,24 @@ using ForwardDiff
         μ      = 2.528009215182033e-5,
         t_p    = 25.13898226959327,
         λ_max  = 2.468621114047195,
+        STT2_norm = 1.881880182286279e4
     ), (
         system = (:Jupiter, :Europa),
         u0     = [0.04867586089512202, 0., 0., 0., -0.09354853663949217, 0.],
         μ      = 2.528009215182033e-5,
         t_p    = 70.53945041512506,
         λ_max  = 2.804814246519340e7,
+        STT2_norm = 8.290465853749079e17
     ), (
         system = (:Earth, :Moon),
         u0     = [-0.013059020050628, 0., 0.07129515195874, 0., -0.526306975588415, 0.],
         μ      = 0.01215509906405700,
         t_p    = 2.517727406553485,
         λ_max  = 17.632688124231755,
+        STT2_norm = 5.182997297997671e6
     )]
+
+    case = test_cases[1]
 
     for case in test_cases
         cr3bp = CR3BP(case.system...; μ=case.μ)
@@ -55,6 +60,11 @@ using ForwardDiff
         @test λ_max_VE ≈ case.λ_max rtol=1e-4
         λ_max_VE_handcoded = maximum(norm.(eigvals(STM_VE_handcoded[end])))
         @test λ_max_VE_handcoded ≈ case.λ_max rtol=1e-4
+
+        # Try to get 2nd-order STT and norm of its 2nd-order Tensor
+        STT_AD = STT(AD, state_cr3bp; order=2)
+        STT_AD_2_norm = norm(STT_AD[end].tensors[2])
+        @test STT_AD_2_norm ≈ case.STT2_norm rtol=1e-3
     end
 end
 

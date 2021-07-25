@@ -99,7 +99,7 @@ function extract_sensitivity_tensors(u0::AbstractArray{DualType}, codomain_lengt
     order > 0 || error("Expected order > 0, got $(order).")
     order <= real_order || error("Given state only contains sensitivities of up to order $(real_order), but got $(order).")
 
-    domain_length = numin(DualType)
+    domain_length = ForwardDiff.npartials(DualType)
 
     tensors = TensorMap[]
     for o in 1:order
@@ -111,18 +111,14 @@ function extract_sensitivity_tensors(u0::AbstractArray{DualType}, codomain_lengt
                     u0, 
                     ntuple(i -> reshape(1:input_dims[i], (ntuple(x -> 1, i)..., input_dims[i])), o)...
                 )
-            ), ⊗([ℝ^domain_length for _ in 1:o]...) → ℝ^codomain_length
+            ),
+            ℝ^domain_length → ⊗([ℝ^domain_length for _ in 2:o]..., ℝ^codomain_length)
         )
         
         push!(tensors, tensor)
     end
     return tuple(tensors...)
 end
-
-TensorKit.numin(dualType::Type{<:ForwardDiff.Dual}) = ForwardDiff.npartials(dualType)
-
-tensor_order(::Type{<:StateTransitionTensor{Order}}) where {Order} = Order
-tensor_order(stt::StateTransitionTensor) = tensor_order(typeof(stt))
 
 # Define STT axes as (Out, In) dimensions.
 # NOTE: We use only the 1st-order tensor, because we don't want to subset on higher-orders.
@@ -132,32 +128,29 @@ Base.axes(stt::StateTransitionTensor, i) = axes(stt)[i]
 # Make STMs (1st-order only) broadcastable
 Broadcast.broadcastable(stm::StateTransitionMatrix) = convert(Array, stm.tensors[1])
 
-# Base.length(stm::StateTransitionMatrix) = length(stm.tensors[1])
-# Base.iterate(stm::StateTransitionMatrix, args...) = iterate(stm.tensors[1], args...)
-
 # Define subsets of STTs.
 # We only subset on the (Out, In) dimensions (i.e. up to 1st-order)
-Base.getindex(stm::StateTransitionTensor, domain_to_codomain::Pair) = stm[domain_to_codomain[2], domain_to_codomain[1]]
-function Base.getindex(stm::StateTransitionTensor, codomain_idx, domain_idx)
+Base.getindex(stt::StateTransitionTensor, domain_to_codomain::Pair) = stt[domain_to_codomain[2], domain_to_codomain[1]]
+function Base.getindex(stt::StateTransitionTensor, codomain_idx, domain_idx)
     # Work out size of the newly-indexed codomain and domain. Need this to avoid:
     # 1) scalar indices, which will cause a dimension to be dropped
     # 2) Colon() indices, which have unknown size without context
-    tensor_axes = axes(stm)  # Original tensor axes (to give context)
+    tensor_axes = axes(stt)  # Original tensor axes (to give context)
     codomain_size, domain_size = @. length(getindex(tensor_axes, (codomain_idx, domain_idx)))
 
     # Create the vector space based on the above sizes
     codomain_dim, domain_dim = (ℝ^codomain_size, ℝ^domain_size)
 
     new_tensors = []
-    for tensor in stm.tensors
-        tensor_array = convert(Array, tensor)[codomain_idx, domain_idx]
+    for (order, tensor) in enumerate(stt.tensors)
+        tensor_array = convert(Array, tensor)[codomain_idx, repeat([domain_idx], order)...]
         tensor_map = TensorMap(
             collect(tensor_array), # XXX: Need the collect() to avoid scalars when the dims are (1, 1)
-            ⊗([domain_dim for _ in 1:numin(tensor)]...) → codomain_dim
+            domain_dim → ⊗(codomain_dim, [domain_dim for _ in 2:order]...)
         )
         push!(new_tensors, tensor_map)
     end
-    StateTransitionTensor(stm.tspan, tuple(new_tensors...))
+    StateTransitionTensor(stt.tspan, tuple(new_tensors...))
 end
 
 # Display
@@ -165,8 +158,8 @@ Base.show(io::IO, x::StateTransitionTensor{Order}) where {Order} = print(io, str
 Base.show(io::IO, x::StateTransitionMatrix) = print(io, string(SciMLBase.TYPE_COLOR, "STM", SciMLBase.NO_COLOR, "($(space(x.tensors[end])), t=$(x.tspan))"))
 
 # Comparison
-# Base.isapprox(stt1::StateTransitionTensor{N}, stt2::StateTransitionTensor{N}; kwargs...) where {N} = all(isapprox.(stt1.tensors, stt2.tensors; kwargs...))
-# Base.isapprox(stt1::StateTransitionTensor{N}, stt2::StateTransitionTensor{M}; kwargs...) where {N,M} = false
+Base.isapprox(stt1::S, stt2::S; kwargs...) where {N,S<:StateTransitionTensor{N}} = all(isapprox.(stt1.tensors, stt2.tensors; kwargs...))
+Base.isapprox(stt1::StateTransitionTensor{N}, stt2::StateTransitionTensor{M}; kwargs...) where {N,M} = false
 
 # Generate multiplication functions for STTs up to MAX_STT_ORDER
 #----------------------------------------------------------------
@@ -200,78 +193,88 @@ Base.show(io::IO, x::StateTransitionMatrix) = print(io, string(SciMLBase.TYPE_CO
     end
 
     return quote
-        RES = Tensor(zeros, domain(STT.tensors[1]))
+        RES = Tensor(zeros, codomain(STT.tensors[1]))
         $(exprs...)
         return RES
     end
 end
 
 (Base.:*)(coeff::Number, stt::StateTransitionTensor) = StateTransitionTensor(stt.tspan, coeff .* stt.tensors)
-(Base.:*)(stt::StateTransitionTensor, dx) = stt * Tensor(collect(dx), domain(stt.tensors[1]))
-function (Base.:*)(stt1::StateTransitionTensor, stt2::StateTransitionTensor)
-    # Multiply together all the tensors and fix up the corresponding timespan
-    return StateTransitionTensor((stt2.tspan[1], stt1.tspan[2]), stt1.tensors .* stt2.tensors)
+(Base.:*)(stt::StateTransitionTensor, dx::Union{Number,AbstractVector}) = stt * Tensor(collect(dx), domain(stt.tensors[1]))
+
+@generated function (Base.:*)(stt1::StateTransitionTensor{Order}, stt2::StateTransitionTensor{Order}) where {Order}
+    # [Boone.2021b Appendix B | Park.2007 | Park.2007b]
+    exprs = []
+
+    if Order == 2
+        push!(exprs, quote
+                # The second order tensor...
+                @tensor TENSOR2[i,a,b] := stt1.tensors[1][i,alpha] * stt2.tensors[2][alpha,a,b] + stt1.tensors[2][i,alpha,beta] * stt2.tensors[1][alpha,a] * stt2.tensors[1][beta,b]
+                push!(multiplied_tensors, permute(TENSOR2, (1,), (2, 3)))
+            end
+        )
+    elseif Order > 2
+        error("Multiplication for STTs of Order > 2 not yet implemented!")
+    end
+
+    quote
+        # Resulting timespan.
+        # NOTE: Expects that stt1.tspan[1] == stt2.tspan[2] (i.e. the timespans line up like (a,b)*(c,a)).
+        # Behaviour is unknown otherwise.
+        multiplied_timespan = (stt2.tspan[1], stt1.tspan[2])
+
+        # The first order tensors simply multiply together
+        multiplied_tensors = TensorMap[]
+        push!(multiplied_tensors, permute(stt1.tensors[1] * stt2.tensors[1], (1,), (2,)))
+
+        $(exprs...)
+
+        return StateTransitionTensor(multiplied_timespan, tuple(multiplied_tensors...))
+    end
 end
 
 # Solving linear equation
 (Base.:\)(stt::StateTransitionTensor, dx) = inv(stt) * dx
 
 # Arithmetic
-function (Base.:+)(stt1::S, stt2::S) where {S<:StateTransitionTensor}
-    # TODO: What do we do about tspans?
-    StateTransitionTensor(stt1.tspan, stt1.tensors .+ stt2.tensors)
-end
-function (Base.:-)(stt1::S, stt2::S) where {S<:StateTransitionTensor}
-    # TODO: What do we do about tspans?
-    StateTransitionTensor(stt1.tspan, stt1.tensors .- stt2.tensors)
-end
-function (Base.:-)(stt1::StateTransitionTensor)
-    # TODO: What do we do about tspans?
-    StateTransitionTensor(stt1.tspan, (-).(stt1.tensors))
-end
+(Base.:+)(stt1::S, stt2::S) where {S<:StateTransitionMatrix} = StateTransitionTensor(stt1.tspan, stt1.tensors .+ stt2.tensors)
+(Base.:-)(stt1::S, stt2::S) where {S<:StateTransitionMatrix} = StateTransitionTensor(stt1.tspan, stt1.tensors .- stt2.tensors)
+(Base.:-)(stt1::StateTransitionMatrix) = StateTransitionTensor(stt1.tspan, (-).(stt1.tensors))
 
 # Custom constructors
-(Base.one)(stm::StateTransitionMatrix) = StateTransitionTensor(stm.tspan, one.(stm.tensors))
+(Base.one)(stm::StateTransitionTensor) = StateTransitionTensor(stm.tspan, (one(stm.tensors[1]), zero.(stm.tensors[2:end])...))
 
 # Inverses and adjoints
-(Base.inv)(stm::StateTransitionMatrix) = StateTransitionTensor((stm.tspan[2], stm.tspan[1]), inv.(stm.tensors))
+@generated function (Base.inv)(stt::StateTransitionTensor{Order}) where {Order}
+    # [Park.2007, Definition 2.2.12 (Inverse STTs)]
+    exprs = []
+
+    if Order == 2
+        # The other orders require
+        push!(exprs, quote
+                @tensor TENSOR2[i,a,b] := -inverse_tensors[1][i,alpha] * stt.tensors[2][alpha,j1,j2] * inverse_tensors[1][j1,a] * inverse_tensors[1][j2,b]
+                push!(inverse_tensors, permute(TENSOR2, (1,), (2, 3)))
+            end
+        )
+    elseif Order > 2
+        error("inv() for STTs of Order > 2 not yet implemented!")
+    end
+
+    return quote
+        inverse_tspan = (stt.tspan[end], stt.tspan[begin])
+        inverse_tensors = TensorMap[]
+
+        # The first-order tensor simply equals its inverse [Park.2007 eq.2.36]
+        push!(inverse_tensors, permute(inv(stt.tensors[1]), (1,), (2,)))
+
+        $(exprs...)
+
+        StateTransitionTensor(inverse_tspan, tuple(inverse_tensors...))
+    end
+end
+
+# Adjoint
 (Base.adjoint)(stm::StateTransitionMatrix) = StateTransitionTensor(stm.tspan, adjoint.(stm.tensors))
-
-# Multiplication of STMs.
-# TODO: Need a much better explanation of this.
-# NOTE: Assumes that the timespan represented by each STM is non-overlapping but
-# continuous over a full time interval of [t_0, t_f], such that:
-# -- STM1 represents a time interval [t_k, t_f]
-# -- STM2 represents a time interval [t_0, t_k]
-# -- (STM1 * STM2) results in the STM for the time interval [t_0, t_f]
-# function (Base.:*)(stm1::StateTransitionMatrix, stm2::StateTransitionMatrix)
-#     tensor1 = stm1.tensors[1]
-#     tensor2 = stm2.tensors[1]
-#     new_tensor = similar(tensor1)
-#     @tullio new_tensor[i,a] = tensor1[i,alpha] * tensor2[alpha,a]
-#     StateTransitionTensor((new_tensor,))
-# end
-
-# function (Base.:*)(stt1::S, stt2::S) where {S<:StateTransitionTensor{2}}
-#     # 1st order
-#     tensor1 = stt1.tensors[1]
-#     tensor2 = stt2.tensors[1]
-#     new_tensor1 = similar(tensor1)
-#     @tullio new_tensor1[i,a] = tensor1[i,alpha] * tensor2[alpha,a]
-
-#     # 2nd order
-#     tensor1_2 = stt1.tensors[2]
-#     tensor2_2 = stt2.tensors[2]
-#     new_tensor2 = similar(tensor1_2)
-#     @tullio new_tensor2[i,a,b] = tensor1[i,alpha] * tensor2_2[alpha,a,b] + tensor1_2[i,alpha,beta] * tensor2[alpha,a] * tensor2[beta,b]
-
-#     StateTransitionTensor((new_tensor1, new_tensor2))
-# end
-
-# STTs of orders not generated above are not supported automatically. Users
-# should define their contractions manually. (I wanted to do this completely
-# automatically but haven't been able to yet.)
-# (Base.:*)(::StateTransitionTensor{Order}, _) where {Order} = error("Multiplication for STTs is only defined up to order $(MAX_STT_ORDER), got order $(Order). Please define the multiplication manually.")
 
 @doc """ Sensitivity of the interpolated states (at times t) with respect to initial state. """
 StateTransitionTensor(sol::Trajectory, t; kwargs...) = StateTransitionTensor(sol(t); kwargs...)
@@ -281,15 +284,16 @@ StateTransitionTensor(sol::Trajectory, t::Number; kwargs...) = StateTransitionTe
 StateTransitionTensor(sol::Trajectory; kwargs...) = [StateTransitionTensor(sol[i], (sol.t[begin], sol.t[i]); kwargs...) for i in 1:length(sol.t)]
 
 @doc """ Sensitivity of the state at time t2 with respect to the state at time t1 <= t2. """
-function StateTransitionMatrix(sol::Trajectory, t1, t2; kwargs...)
+function StateTransitionTensor(sol::Trajectory, t1, t2; kwargs...)
     @assert t1 <= t2  "Expected t1 <= t2"
     if t1 == t2
         real_STM = STM(sol, t1)
         return StateTransitionTensor(real_STM.tspan, one.(real_STM.tensors))
     elseif t1 == sol.t[begin]
-        return StateTransitionMatrix(sol, t2; kwargs...)
+        return StateTransitionTensor(sol, t2; kwargs...)
     else
-        return StateTransitionMatrix(sol, t2; kwargs...) * inv(StateTransitionMatrix(sol, t1; kwargs...))
+        # [Park.2007 eq.2.40]
+        return StateTransitionTensor(sol, t2; kwargs...) * inv(StateTransitionTensor(sol, t1; kwargs...))
     end
 end
 
@@ -311,4 +315,4 @@ recursive_value(val::ForwardDiff.Dual) = recursive_value(ForwardDiff.value(val))
 get_order(valtype::Type{<:ForwardDiff.Dual}) = 1 + get_order(valtype.parameters[2])
 get_order(::Type{<:Number}) = 0
 
-# LinearAlgebra.eigvals(stm::StateTransitionMatrix) = eigvals(Array(stm.tensors[1]))
+LinearAlgebra.eigvals(stm::StateTransitionMatrix) = eigvals(convert(Array, stm.tensors[1]))
