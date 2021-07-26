@@ -31,8 +31,6 @@ using ForwardDiff
         STT2_norm = 5.182997297997671e6
     )]
 
-    case = test_cases[1]
-
     for case in test_cases
         cr3bp = CR3BP(case.system...; μ=case.μ)
         cr3bp_handcoded = HandcodedCR3BP(case.system...; μ=case.μ)
@@ -64,7 +62,7 @@ using ForwardDiff
         # Try to get 2nd-order STT and norm of its 2nd-order Tensor
         STT_AD = STT(AD, state_cr3bp; order=2)
         STT_AD_2_norm = norm(STT_AD[end].tensors[2])
-        @test STT_AD_2_norm ≈ case.STT2_norm rtol=1e-3
+        @test STT_AD_2_norm ≈ case.STT2_norm rtol=1e-2
     end
 end
 

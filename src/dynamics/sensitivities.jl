@@ -332,4 +332,4 @@ function StateTransitionTensor(::Val{:FiniteDiff}, state::State, desired_frame=s
 end
 
 # Compute eigenvalues of an STT -- only uses the 1st-order tensor (STM)!
-LinearAlgebra.eigvals(stt::StateTransitionTensor) = eigvals(stt.tensors[1])
+LinearAlgebra.eigvals(stt::StateTransitionTensor) = eigvals(Array(stt.tensors[1]))
