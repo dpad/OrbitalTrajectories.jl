@@ -277,21 +277,24 @@ let exprs=Expr[], inv_exprs=Expr[]
     end
 end
 
-# Multiplication with a coefficient
-(Base.:*)(coeff::Number, stt::StateTransitionTensor) = StateTransitionTensor(stt.tspan, coeff .* stt.tensors)
+# Type promotion
+Base.promote_rule(::Type{S}, ::Type{<:Union{AbstractMatrix,UniformScaling}}) where {Out,In,S<:StateTransitionMatrix{Out,In}} = S
+Base.convert(::Type{S}, matrix::Union{AbstractMatrix,UniformScaling}) where {Out,In,S<:StateTransitionMatrix{Out,In}} = StateTransitionTensor((0.0, 0.0), (SMatrix{Out,In}(matrix),))
 
-# Elementary operations on STMs (some of these are undefined on the behaviour of tspan)
+# Other forms of multiplication
 (Base.:*)(stm1::StateTransitionMatrix{Out,In}, stm2::StateTransitionMatrix{Out,In}) where {Out,In} = StateTransitionTensor((stm2.tspan[1], stm1.tspan[2]), stm1.tensors .* stm2.tensors)
+(Base.:*)(coeff::Number, stt::StateTransitionTensor) = StateTransitionTensor(stt.tspan, coeff .* stt.tensors)
+(Base.:*)(stm::StateTransitionTensor, other) = *(promote(stm, other)...)
+(Base.:*)(other, stm::StateTransitionTensor) = *(promote(other, stm)...)
+
+# Elementary operations on STMs
 (Base.:+)(stm1::StateTransitionMatrix{Out,In}, stm2::StateTransitionMatrix{Out,In}) where {Out,In} = StateTransitionTensor(stm1.tspan, stm1.tensors .+ stm2.tensors)
+(Base.:+)(stm1::StateTransitionMatrix, other) = +(promote(stm1, other)...)
+(Base.:+)(other, stm1::StateTransitionMatrix) = +(promote(other, stm1)...)
 (Base.:-)(stm1::StateTransitionMatrix{Out,In}) where {Out,In} = StateTransitionTensor(stm1.tspan, (+).(stm1.tensors))
 
 # Solving linear equation
 (Base.:\)(stt::StateTransitionTensor, dx) = inv(stt) * dx
-
-# Arithmetic
-# (Base.:+)(stt1::S, stt2::S) where {S<:StateTransitionMatrix} = StateTransitionTensor(stt1.tspan, stt1.tensors .+ stt2.tensors)
-# (Base.:-)(stt1::S, stt2::S) where {S<:StateTransitionMatrix} = StateTransitionTensor(stt1.tspan, stt1.tensors .- stt2.tensors)
-# (Base.:-)(stt1::StateTransitionMatrix) = StateTransitionTensor(stt1.tspan, (-).(stt1.tensors))
 
 # Adjoint
 (Base.adjoint)(stm::StateTransitionMatrix) = StateTransitionTensor(stm.tspan, adjoint.(stm.tensors))
