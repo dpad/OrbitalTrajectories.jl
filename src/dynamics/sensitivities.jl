@@ -320,15 +320,15 @@ function StateTransitionTensor(sol::Trajectory, t1, t2; kwargs...)
 end
 
 # Compute STMs by solving the given state first
-function StateTransitionTensor(::Val{:FiniteDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; kwargs...)
-    # NOTE: Only supports order=1
-    tensors = (FiniteDiff.finite_difference_jacobian(state.u0) do u0
+function StateTransitionTensor(::Val{:FiniteDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; order=1, kwargs...)
+    order == 1 || error("FiniteDiff STT only supports order 1 (STM), got $(order).")
+    tensor = FiniteDiff.finite_difference_jacobian(state.u0) do u0
         new_state = remake(state, u0=u0)
         trajectory = solve(new_state, alg; kwargs...)
         trajectory_converted = convert_to_frame(trajectory, desired_frame)
         end_state_u = trajectory_converted.sol[end]
-    end,)
-    StateTransitionTensor(tensors)
+    end
+    StateTransitionTensor(state.tspan, (SMatrix{size(tensor)...}(tensor),))
 end
 
 # Compute eigenvalues of an STT -- only uses the 1st-order tensor (STM)!

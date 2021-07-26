@@ -74,11 +74,14 @@ end
 
     # Compute final STM
     STM_AD = STM(AD, prob)[end]
+    STM_VE = STM(VE, prob)[end]
     STM_FD = STM(FD, prob)
     @test STM_AD ≈ STM_FD rtol=1e-5
+    @test STM_AD ≈ STM_VE rtol=1e-5
 
     # Compute STM trace
     STM_AD_trace = solve_sensitivity(AD, prob)
+    STM_VE_trace = solve_sensitivity(VE, prob)
     @test STM(STM_AD_trace[end]) ≈ STM_AD rtol=1e-5
     @test STM(STM_AD_trace, STM_AD_trace.t[end]) ≈ STM_AD rtol=1e-5
 end

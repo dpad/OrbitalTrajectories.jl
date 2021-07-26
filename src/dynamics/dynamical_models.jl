@@ -52,7 +52,7 @@ has_jacobian(X::Type{<:DiffEqBase.ODEFunction}) = !isnothing(fieldtype(X, :jac))
     D = Differential(iv)
 
     # Get the Jacobian matrix (A(t))
-    A = Base.invokelatest(f.jac, Num.(dvs), Num.(params), Num(iv))
+    A = f.jac(Num.(dvs), Num.(params), Num(iv))
 
     # The State Transition Matrix (STM) ODE function is defined as follows, including the N^2 Jacobian equations +
     # the N first-order equations of motion. [Koon 2011]
