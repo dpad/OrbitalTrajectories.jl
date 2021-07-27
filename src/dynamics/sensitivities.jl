@@ -196,13 +196,15 @@ let exprs=Expr[], inv_exprs=Expr[]
         # Here, we generate an automatic list of indices (e.g. (j, k)), and from
         # that a list of [dx[j], dx[k]...].
         tensor_indices = [gensym() for _ in 1:ORDER]
-        dxs = [:(DX[$(idx)]) for idx in tensor_indices]
+        dxs = [:(dx[$(idx)]) for idx in tensor_indices]
 
         # [Refer to Park 2007, "Nonlinear trajectory navigation", eq.2.22]
         # The ith-order STT tensor should be contracted with i variables.
         # For example order=2 gives DX[i] = tensor[i,j,k] * dx[j] * dx[k].
         push!(exprs, quote
-            @tullio DX[i] += *($(1 / factorial(ORDER)), stt.tensors[$(ORDER)][i,$(tensor_indices[1:ORDER]...)], $(dxs[1:ORDER]...))
+            tensor = stt.tensors[$(ORDER)]
+            coeff = 1 / factorial($(ORDER))
+            @tullio DX[i] += *(coeff, tensor[i,$(tensor_indices[1:ORDER]...)], $(dxs[1:ORDER]...))
         end)
 
         if ORDER == 2
@@ -223,7 +225,7 @@ let exprs=Expr[], inv_exprs=Expr[]
         eval(quote
             function (Base.:*)(stt::StateTransitionTensor{$(ORDER),Out}, dx::AbstractVector) where {Out}
                 DX = zeros(eltype(stt.tensors[1]), Out)
-                $(exprs...)
+                $(exprs[1:ORDER]...)
                 DX
             end
 
@@ -268,7 +270,7 @@ let exprs=Expr[], inv_exprs=Expr[]
                 # The first-order tensor simply equals its inverse [Park.2007 eq.2.36]
                 push!(inverse_tensors, inv(stt.tensors[1]))
 
-                $(inv_exprs...)
+                $(inv_exprs[1:ORDER-1]...)
 
                 StateTransitionTensor(inverse_tspan, tuple(inverse_tensors...))
             end
