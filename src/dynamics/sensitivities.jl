@@ -150,12 +150,13 @@ function extract_sensitivity_tensors(u0::AbstractArray{DualType}, codomain_dim, 
 end
 
 # Build identity STMs (not STTs)
-Base.one(stm::StateTransitionMatrix{Out,In}) where {Out,In} = StateTransitionTensor(stm.tspan, (SMatrix{Out,In,Float64}(I),))
+Base.one(::S) where {Out,In,S<:StateTransitionMatrix{Out,In}} = convert(S, I)
 
 # Define subsets of STTs, with axes as (Out, In) dimensions.
 # NOTE: We assume all the higher-order tensors just repeat the In dimension, and
 # we only subset on thee 1st-order.
-Base.axes(stt::StateTransitionTensor{Order,Out,In}) where {Order,Out,In} = tuple(SOneTo(Out), SOneTo(In))
+Base.size(stt::StateTransitionTensor{Order,Out,In}) where {Order,Out,In} = (Out, In)
+Base.axes(stt::StateTransitionTensor) = SOneTo.(size(stt))
 Base.axes(stt::StateTransitionTensor, i) = axes(stt)[i]
 Base.getindex(stt::StateTransitionTensor, domain_to_codomain::Pair) = stt[domain_to_codomain.second, domain_to_codomain.first]
 function Base.getindex(stt::StateTransitionTensor{Order}, codomain, domain) where {Order}
@@ -191,109 +192,108 @@ Base.isapprox(stt1::StateTransitionTensor{N}, stt2::StateTransitionTensor{M}; kw
 # in an @generated function but it's up to ~10x slower, so we just generate up
 # to MAX_STT_ORDER at package pre-compile time here.
 const MAX_STT_ORDER = 3
-let exprs=Expr[], inv_exprs=Expr[]
-    for ORDER in 1:MAX_STT_ORDER
-        # Here, we generate an automatic list of indices (e.g. (j, k)), and from
-        # that a list of [dx[j], dx[k]...].
-        tensor_indices = [gensym() for _ in 1:ORDER]
-        dxs = [:(dx[$(idx)]) for idx in tensor_indices]
+const exprs = Expr[]
+const inv_exprs = Expr[]
+for ORDER in 1:MAX_STT_ORDER
+    # Here, we generate an automatic list of indices (e.g. (j, k)), and from
+    # that a list of [dx[j], dx[k]...].
+    tensor_indices = [gensym() for _ in 1:ORDER]
+    dxs = [:(dx[$(idx)]) for idx in tensor_indices]
 
-        # [Refer to Park 2007, "Nonlinear trajectory navigation", eq.2.22]
-        # The ith-order STT tensor should be contracted with i variables.
-        # For example order=2 gives DX[i] = tensor[i,j,k] * dx[j] * dx[k].
-        push!(exprs, quote
-            tensor = stt.tensors[$(ORDER)]
-            coeff = 1 / factorial($(ORDER))
-            @tullio DX[i] += *(coeff, tensor[i,$(tensor_indices[1:ORDER]...)], $(dxs[1:ORDER]...))
+    # [Refer to Park 2007, "Nonlinear trajectory navigation", eq.2.22]
+    # The ith-order STT tensor should be contracted with i variables.
+    # For example order=2 gives DX[i] = tensor[i,j,k] * dx[j] * dx[k].
+    push!(exprs, quote
+        tensor = stt.tensors[$(ORDER)]
+        coeff = 1 / factorial($(ORDER))
+        @tullio DX[i] += *(coeff, tensor[i,$(tensor_indices[1:ORDER]...)], $(dxs[1:ORDER]...))
+    end)
+
+    if ORDER == 2
+        push!(inv_exprs, quote
+            @tullio INV_TENSOR[i,a,b] := -inverse_tensors[1][i,alpha] * tensors[2][alpha,j1,j2] * inverse_tensors[1][j1,a] * inverse_tensors[1][j2,b]
+            push!(inverse_tensors, INV_TENSOR)
         end)
-
-        if ORDER == 2
-            push!(inv_exprs, quote
-                @tullio INV_TENSOR[i,a,b] := -inverse_tensors[1][i,alpha] * stt.tensors[2][alpha,j1,j2] * inverse_tensors[1][j1,a] * inverse_tensors[1][j2,b]
-                push!(inverse_tensors, INV_TENSOR)
-            end)
-        elseif ORDER == 3
-            push!(inv_exprs, quote
-                @tullio INV_TENSOR[i,a,b,c] := begin
-                    -(inverse_tensors[1][i,alpha] * stt.tensors[2][alpha,j1,j2,j3] + inverse_tensors[2][i,alpha,beta] * (stt.tensors[1][alpha,j1] * stt.tensors[2][beta,j2,j3] + stt.tensors[2][alpha,j1,j2] * stt.tensors[1][beta,j3] + stt.tensors[2][alpha,j1,j3] * stt.tensors[1][beta,j2])) * (inverse_tensors[1][j1,a] * inverse_tensors[1][j2,b] * inverse_tensors[1][j3,c])
-                end
-                push!(inverse_tensors, INV_TENSOR)
-            end)
-        end
-
-        # Create a function specialised to this specific STT order.
-        eval(quote
-            function (Base.:*)(stt::StateTransitionTensor{$(ORDER),Out}, dx::AbstractVector) where {Out}
-                DX = zeros(eltype(stt.tensors[1]), Out)
-                $(exprs[1:ORDER]...)
-                DX
+    elseif ORDER == 3
+        push!(inv_exprs, quote
+            @tullio INV_TENSOR[i,a,b,c] := begin
+                -(inverse_tensors[1][i,alpha] * tensors[2][alpha,j1,j2,j3] + inverse_tensors[2][i,alpha,beta] * (tensors[1][alpha,j1] * tensors[2][beta,j2,j3] + tensors[2][alpha,j1,j2] * tensors[1][beta,j3] + tensors[2][alpha,j1,j3] * tensors[1][beta,j2])) * (inverse_tensors[1][j1,a] * inverse_tensors[1][j2,b] * inverse_tensors[1][j3,c])
             end
-
-            # # [Boone.2021b Appendix B | Park.2007 | Park.2007b]
-            # exprs = []
-
-            # if Order == 2
-            #     push!(exprs, quote
-            #             # The second order tensor...
-            #             @tensor TENSOR2[i,a,b] := stt1.tensors[1][i,alpha] * stt2.tensors[2][alpha,a,b] + stt1.tensors[2][i,alpha,beta] * stt2.tensors[1][alpha,a] * stt2.tensors[1][beta,b]
-            #             push!(multiplied_tensors, permute(TENSOR2, (1,), (2, 3)))
-            #         end
-            #     )
-            # elseif Order > 2
-            #     error("Multiplication for STTs of Order > 2 not yet implemented!")
-            # end
-
-            #     exprs = []
-
-
-            # function (Base.:*)(stt1::StateTransitionTensor{Order}, stt2::StateTransitionTensor{Order}) where {Order}
-            #     # Resulting timespan.
-            #     # NOTE: Expects that stt1.tspan[1] == stt2.tspan[2] (i.e. the timespans line up like (a,b)*(c,a)).
-            #     # Behaviour is unknown otherwise.
-            #     multiplied_timespan = (stt2.tspan[1], stt1.tspan[2])
-
-            #     # The first order tensors simply multiply together
-            #     multiplied_tensors = TensorMap[]
-            #     push!(multiplied_tensors, permute(stt1.tensors[1] * stt2.tensors[1], (1,), (2,)))
-
-            #     $(exprs...)
-
-            #     return StateTransitionTensor(multiplied_timespan, tuple(multiplied_tensors...))
-            # end
-
-            # Inverses and adjoints
-            function (Base.inv)(stt::StateTransitionTensor{$(ORDER)})
-                # [Refer to Park 2007, "Nonlinear trajectory navigation", Definition 2.2.12 (Inverse STTs)]
-                inverse_tspan = (stt.tspan[end], stt.tspan[begin])
-                inverse_tensors = SArray[]
-
-                # The first-order tensor simply equals its inverse [Park.2007 eq.2.36]
-                push!(inverse_tensors, inv(stt.tensors[1]))
-
-                $(inv_exprs[1:ORDER-1]...)
-
-                StateTransitionTensor(inverse_tspan, tuple(inverse_tensors...))
-            end
-
+            push!(inverse_tensors, INV_TENSOR)
         end)
     end
+
+    # Create a function specialised to this specific STT order.
+    eval(quote
+        function (Base.:*)(stt::StateTransitionTensor{$(ORDER)}, dx::AbstractVector)
+            DX = zeros(eltype(stt.tensors[1]), size(stt)[1])
+            $(exprs[1:ORDER]...)
+            DX
+        end
+
+        # # [Boone.2021b Appendix B | Park.2007 | Park.2007b]
+        # exprs = []
+
+        # if Order == 2
+        #     push!(exprs, quote
+        #             # The second order tensor...
+        #             @tensor TENSOR2[i,a,b] := stt1.tensors[1][i,alpha] * stt2.tensors[2][alpha,a,b] + stt1.tensors[2][i,alpha,beta] * stt2.tensors[1][alpha,a] * stt2.tensors[1][beta,b]
+        #             push!(multiplied_tensors, permute(TENSOR2, (1,), (2, 3)))
+        #         end
+        #     )
+        # elseif Order > 2
+        #     error("Multiplication for STTs of Order > 2 not yet implemented!")
+        # end
+
+        #     exprs = []
+
+
+        # function (Base.:*)(stt1::StateTransitionTensor{Order}, stt2::StateTransitionTensor{Order}) where {Order}
+        #     # Resulting timespan.
+        #     # NOTE: Expects that stt1.tspan[1] == stt2.tspan[2] (i.e. the timespans line up like (a,b)*(c,a)).
+        #     # Behaviour is unknown otherwise.
+        #     multiplied_timespan = (stt2.tspan[1], stt1.tspan[2])
+
+        #     # The first order tensors simply multiply together
+        #     multiplied_tensors = TensorMap[]
+        #     push!(multiplied_tensors, permute(stt1.tensors[1] * stt2.tensors[1], (1,), (2,)))
+
+        #     $(exprs...)
+
+        #     return StateTransitionTensor(multiplied_timespan, tuple(multiplied_tensors...))
+        # end
+
+        # Inverses and adjoints
+        function (Base.inv)(stt::StateTransitionTensor{$(ORDER)})
+            # [Refer to Park 2007, "Nonlinear trajectory navigation", Definition 2.2.12 (Inverse STTs)]
+            inverse_tspan = (stt.tspan[end], stt.tspan[begin])
+            inverse_tensors = SArray[]
+            tensors = stt.tensors
+
+            # The first-order tensor simply equals its inverse [Park.2007 eq.2.36]
+            push!(inverse_tensors, inv(tensors[1]))
+
+            $(inv_exprs[1:ORDER-1]...)
+
+            StateTransitionTensor(inverse_tspan, tuple(inverse_tensors...))
+        end
+
+    end)
 end
 
 # Type promotion
-Base.promote_rule(::Type{S}, ::Type{<:Union{AbstractMatrix,UniformScaling}}) where {Out,In,S<:StateTransitionMatrix{Out,In}} = S
-Base.convert(::Type{S}, matrix::Union{AbstractMatrix,UniformScaling}) where {Out,In,S<:StateTransitionMatrix{Out,In}} = StateTransitionTensor((0.0, 0.0), (SMatrix{Out,In}(matrix),))
+Base.promote_rule(::Type{S}, ::Type{<:Union{AbstractMatrix,UniformScaling}}) where {Out,In,S<:StateTransitionMatrix{Out,In}} = SMatrix{Out,In,Float64}
+Base.convert(::Type{S}, stm::StateTransitionMatrix) where {S<:AbstractMatrix} = convert(S, stm.tensors[1])
+Base.convert(::Type{S}, uniform::UniformScaling) where {A,S<:SMatrix{A,A}} = S(uniform)
 
 # Other forms of multiplication
 (Base.:*)(stm1::StateTransitionMatrix{Out,In}, stm2::StateTransitionMatrix{Out,In}) where {Out,In} = StateTransitionTensor((stm2.tspan[1], stm1.tspan[2]), stm1.tensors .* stm2.tensors)
-(Base.:*)(coeff::Number, stt::StateTransitionTensor) = StateTransitionTensor(stt.tspan, coeff .* stt.tensors)
-(Base.:*)(stm::StateTransitionTensor, other) = *(promote(stm, other)...)
-(Base.:*)(other, stm::StateTransitionTensor) = *(promote(other, stm)...)
+(Base.:*)(stt::StateTransitionTensor, other) = *(promote(stt, other)...)
+(Base.:*)(other, stt::StateTransitionTensor) = *(promote(other, stt)...)
 
 # Elementary operations on STMs
-(Base.:+)(stm1::StateTransitionMatrix{Out,In}, stm2::StateTransitionMatrix{Out,In}) where {Out,In} = StateTransitionTensor(stm1.tspan, stm1.tensors .+ stm2.tensors)
 (Base.:+)(stm1::StateTransitionMatrix, other) = +(promote(stm1, other)...)
 (Base.:+)(other, stm1::StateTransitionMatrix) = +(promote(other, stm1)...)
-(Base.:-)(stm1::StateTransitionMatrix{Out,In}) where {Out,In} = StateTransitionTensor(stm1.tspan, (+).(stm1.tensors))
 
 # Solving linear equation
 (Base.:\)(stt::StateTransitionTensor, dx) = inv(stt) * dx
