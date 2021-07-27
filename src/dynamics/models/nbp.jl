@@ -28,14 +28,13 @@ Base.show(io::IO, x::NBPSystemProperties) = print(io, "($(x.center), acc=$(x.bod
 #-----------------------------------#
 # EPHEMERIS-NBP EQUATIONS OF MOTION #
 #-----------------------------------#
-struct _NBP_ODEFunctions{S,F,F2} <: Abstract_ModelODEFunctions
+struct NBP_ODESystem{S,F} <: Abstract_AstrodynamicalODESystem
     ode_system :: S
     ode_f      :: F
-    ode_stm_f  :: F2
 end
 
 # XXX: Need the "T" in place for @memoize to work
-@memoize function ModelingToolkit.ODESystem(T::Type{_NBP_ODEFunctions}, props::NBPSystemProperties)
+@memoize function ModelingToolkit.ODESystem(T::Type{NBP_ODESystem}, props::NBPSystemProperties)
     @parameters t  # Time in J2000 epoch
     @variables x(t) y(t) z(t)
     D2 = Differential(t)^2
@@ -76,7 +75,7 @@ end
 #---------------------#
 # EPHEMERIS-NBP MODEL #
 #---------------------#
-struct EphemerisNBP{O<:_NBP_ODEFunctions,P<:NBPSystemProperties} <: Abstract_DynamicalModel
+struct EphemerisNBP{O<:NBP_ODESystem,P<:NBPSystemProperties} <: Abstract_AstrodynamicalModel
     ode   :: O
     props :: P
 end
@@ -85,7 +84,7 @@ function EphemerisNBP(bodies::Vararg{Symbol}; center=nothing, kwargs...)
     all_bodies = isnothing(center) ? (bodies[1], bodies...) : (center, bodies...)
     bodies_symbols = @. Symbol(lowercase(String(all_bodies)))
     props = NBPSystemProperties(bodies_symbols...)
-    EphemerisNBP(_NBP_ODEFunctions(props; kwargs...), props)
+    EphemerisNBP(NBP_ODESystem(props; kwargs...), props)
 end
 
 Base.show(io::IO, x::EphemerisNBP) = print(io, "$(nameof(typeof(x)))$(x.props)")

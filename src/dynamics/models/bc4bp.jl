@@ -3,13 +3,12 @@ export BC4BP
 #---------------------------#
 # BC4BP EQUATIONS OF MOTION #
 #---------------------------#
-struct _BC4BP_ODEFunctions{S,F,F2} <: Abstract_ModelODEFunctions
+struct BC4BP_ODESystem{S,F} <: Abstract_AstrodynamicalODESystem
     ode_system :: S
     ode_f      :: F
-    ode_stm_f  :: F2
 end
 
-function ModelingToolkit.ODESystem(::Type{_BC4BP_ODEFunctions})
+function ModelingToolkit.ODESystem(::Type{BC4BP_ODESystem})
     @parameters  μ   # Mass fraction (smaller 2 bodies)
     @parameters  μ2  # Mass fraction (note: inverse, as per [DeiTos2018])
     @parameters  a3  # Distance to 3rd body
@@ -43,12 +42,12 @@ function ModelingToolkit.ODESystem(::Type{_BC4BP_ODEFunctions})
 end
 
 # Build the equations at pre-compile time
-const BC4BP_ODEFunctions = _BC4BP_ODEFunctions()
+const BC4BP_ODEFunctions = BC4BP_ODESystem()
 
 #-------------#
 # BC4BP MODEL #
 #-------------#
-struct BC4BP{O<:_BC4BP_ODEFunctions,P<:R4BPSystemProperties} <: Abstract_R3BPModel
+struct BC4BP{O<:BC4BP_ODESystem,P<:R4BPSystemProperties} <: Abstract_R3BPModel
     ode   :: O
     props :: P
 end

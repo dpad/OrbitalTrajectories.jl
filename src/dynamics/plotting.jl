@@ -117,7 +117,7 @@ end
 @recipe function f(STMs::AbstractArray{<:STM})
 end
 
-@recipe function f(sol::Trajectory{<:Abstract_DynamicalModel,<:Abstract_ReferenceFrame,T}) where {T <: ForwardDiff.Dual}
+@recipe function f(sol::Trajectory{<:Abstract_AstrodynamicalModel,<:Abstract_ReferenceFrame,T}) where {T <: ForwardDiff.Dual}
     trace_vars = get(plotattributes, :trace, false)
     trace_stability = get(plotattributes, :trace_stability, false)
     denseplot = get(plotattributes, :denseplot, true)
@@ -176,11 +176,11 @@ end
     end
 end
 
-@recipe function f(model::Abstract_DynamicalModel, frame::Abstract_ReferenceFrame)
+@recipe function f(model::Abstract_AstrodynamicalModel, frame::Abstract_ReferenceFrame)
     nothing
 end
 
-@recipe function f(model::Abstract_DynamicalModel, frame::SynodicFrame)
+@recipe function f(model::Abstract_AstrodynamicalModel, frame::SynodicFrame)
     # User arguments
     nolabels = get(plotattributes, :nolabels, get(plotattributes, :nomodel, false))
     plot_libration = get(plotattributes, :libration_points, true)

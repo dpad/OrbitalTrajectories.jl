@@ -18,8 +18,8 @@ const VE = Val(:VariationalEquations)
 
 @traitdef ModelSupports{X}
 @traitimpl ModelSupports{X} <- model_supports_sensitivity_variational_equations(X)
-model_supports_sensitivity_variational_equations(X::Type{<:Abstract_ModelODEFunctions}) = hasfield(X, :ode_stm_f)
-model_supports_sensitivity_variational_equations(X::Type{<:Abstract_DynamicalModel}) = model_supports_sensitivity_variational_equations(fieldtype(X, :ode))
+# model_supports_sensitivity_variational_equations(X::Type{<:Abstract_AstrodynamicalODESystem}) = hasfield(X, :ode_stm_f)
+model_supports_sensitivity_variational_equations(X::Type{<:Abstract_AstrodynamicalModel}) = model_supports_sensitivity_variational_equations(fieldtype(X, :ode))
 model_supports_sensitivity_variational_equations(X::Type{<:State}) = model_supports_sensitivity_variational_equations(fieldtype(X, :model))
 
 @doc """ Return the fully propagated trajectory including state sensitivities with respect to the initial state. """
@@ -45,18 +45,18 @@ function solve_sensitivity(::Val{:ForwardDiff}, state::State, desired_frame=stat
     sol = solve(state_AD, alg; kwargs...)
     return convert_to_frame(sol, desired_frame)
 end
-@traitfn function solve_sensitivity(::Val{:VariationalEquations}, state::S, desired_frame=state.frame, alg=DEFAULT_ALG; order=1, kwargs...) where {S; ModelSupports{S}}
-    order == 1 || error("Variational equations only support order=1 for now.")
+# @traitfn function solve_sensitivity(::Val{:VariationalEquations}, state::S, desired_frame=state.frame, alg=DEFAULT_ALG; order=1, kwargs...) where {S; ModelSupports{S}}
+#     order == 1 || error("Variational equations only support order=1 for now.")
 
-    dim = length(state.u0)
-    I_flat = reshape(Matrix{Float64}(I, dim, dim), dim^2)
-    u0_STM = MVector{dim^2 + dim}(vcat(state.u0, I_flat))
-    prob_vareqns = State(state.model, state.frame, ODEProblem(state.model.ode.ode_stm_f, u0_STM, state.tspan, state.p))
-    traj_vareqns_unconverted = solve(prob_vareqns, alg; kwargs...)
+#     dim = length(state.u0)
+#     I_flat = reshape(Matrix{Float64}(I, dim, dim), dim^2)
+#     u0_STM = MVector{dim^2 + dim}(vcat(state.u0, I_flat))
+#     prob_vareqns = State(state.model, state.frame, ODEProblem(state.model.ode.ode_stm_f, u0_STM, state.tspan, state.p))
+#     traj_vareqns_unconverted = solve(prob_vareqns, alg; kwargs...)
 
-    # Convert to the desired frame
-    return convert_to_frame(traj_vareqns_unconverted, desired_frame)
-end
+#     # Convert to the desired frame
+#     return convert_to_frame(traj_vareqns_unconverted, desired_frame)
+# end
 solve_sensitivity(::Val{:FiniteDiff}, args...; kwargs...) = error("solve_sensitivity(state) is not defined for FiniteDiff. Call STM(FD, state) instead.")
 
 #--------------------------------#

@@ -79,7 +79,7 @@ function corrector_callback(::Abstract_AxisymmetricCorrector, system::EphemerisN
         end
 end
 
-function corrector_callback(::Abstract_AxisymmetricCorrector, ::Abstract_DynamicalModel; interp_points=10)
+function corrector_callback(::Abstract_AxisymmetricCorrector, ::Abstract_AstrodynamicalModel; interp_points=10)
     # TODO: Play with interp_points, interp_points=0 halves runtime/memory, but might cause issues due to oscillation around y-axis
     # TODO: idxs=[2] makes things very slow, even though it seems it should speed it up.
     return ContinuousCallback(orbit_xcrossing, terminate_after_N_crossings!; interp_points, save_positions=(false, false))

@@ -4,27 +4,26 @@ export jacobi
 #---------------------------#
 # CR3BP EQUATIONS OF MOTION #
 #---------------------------#
-struct _CR3BP_ODEFunctions{S,F,F2} <: Abstract_ModelODEFunctions
+struct CR3BP_ODESystem{S,F} <: Abstract_AstrodynamicalODESystem
     ode_system :: S
     ode_f      :: F
-    ode_stm_f  :: F2
 end
 
-function ModelingToolkit.ODESystem(::Type{_CR3BP_ODEFunctions})
+function ModelingToolkit.ODESystem(::Type{CR3BP_ODESystem})
     # Build from the ER3BP equations (with eccentricity = 0 for circular)
-    eqs_er3bp = ODESystem(_ER3BP_ODEFunctions)
+    eqs_er3bp = ODESystem(ER3BP_ODESystem)
     (μ, e) = parameters(eqs_er3bp)
     eqs = [eq.lhs ~ simplify(substitute(eq.rhs, e => 0)) for eq in equations(eqs_er3bp)]
     return ODESystem(eqs, independent_variable(eqs_er3bp), states(eqs_er3bp), [μ])
 end
 
 # Build the equations at pre-compile time
-const CR3BP_ODEFunctions = _CR3BP_ODEFunctions()
+const CR3BP_ODEFunctions = CR3BP_ODESystem()
 
 #-------------#
 # CR3BP MODEL #
 #-------------#
-struct CR3BP{handcoded,O<:_CR3BP_ODEFunctions,P<:R3BPSystemProperties} <: Abstract_R3BPModel
+struct CR3BP{handcoded,O<:CR3BP_ODESystem,P<:R3BPSystemProperties} <: Abstract_R3BPModel
     ode   :: O
     props :: P
 end
@@ -35,7 +34,7 @@ function CR3BP{nothandcoded}(props::R3BPSystemProperties; kwargs...) where {noth
     if length(kwargs) == 0
         ode = CR3BP_ODEFunctions
     else
-        ode = _CR3BP_ODEFunctions(; kwargs...)
+        ode = CR3BP_ODESystem(; kwargs...)
     end
     CR3BP{false, typeof(ode), typeof(props)}(ode, props)
 end
@@ -46,7 +45,7 @@ ModelingToolkit.parameters(model::CR3BP{false}) = SVector(model.props.μ)
 # Hand-coded CR3BP
 HandcodedCR3BP(args...; kwargs...) = CR3BP{Val{true}}(R3BPSystemProperties(args...; kwargs...))
 function CR3BP{handcoded}(props::R3BPSystemProperties) where {handcoded<:Val{true}} 
-    ode = _CR3BP_ODEFunctions(nothing, handcodedCR3BP, handcodedCR3BP_withSTM)
+    ode = CR3BP_ODESystem(nothing, handcodedCR3BP, handcodedCR3BP_withSTM)
     CR3BP{true, typeof(ode), typeof(props)}(ode, props)
 end
 ModelingToolkit.parameters(model::CR3BP{true}) = SVector(model.props.μ)

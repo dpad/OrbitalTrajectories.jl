@@ -44,7 +44,7 @@ end
 
     R3BPSystemProperties(a, b, μ, L, data[:V], data[:T], e, R1, R2)
 end
-R3BPSystemProperties(system::Abstract_DynamicalModel) = R3BPSystemProperties(primary_body(system), secondary_body(system))
+R3BPSystemProperties(system::Abstract_AstrodynamicalModel) = R3BPSystemProperties(primary_body(system), secondary_body(system))
 
 # TODO: Compute these constants at run-time?
 const _3BPSystemPropertyData = Dict(
