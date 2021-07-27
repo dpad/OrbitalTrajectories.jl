@@ -94,7 +94,7 @@ end
 
     using ModelingToolkit
 
-    calculate_jacobian(ode_system)
+    test = OrbitalTrajectories.Dynamics.add_variational_equations(ode_system, 1)
 
     OrbitalTrajectories.Dynamics.STM_ODEFunction(ode_system, ode_f)
 end

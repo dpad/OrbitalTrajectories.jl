@@ -6,24 +6,21 @@ import ..cse
 
 # wrap_code: perform common substring elimination to improve performance of the resulting models.
 @doc """Generic constructor for a DynamicalModel's underlying ODEFunctions."""
-function (T::Type{<:Abstract_AstrodynamicalODESystem})(args...; wrap_code=(cse, cse), order=1, kwargs...)
-    _ode = ODESystem(T, args...; kwargs...)
+function (T::Type{<:Abstract_AstrodynamicalODESystem})(args...; wrap_code=(cse, cse), VE_order=0, kwargs...)
+    ode = build_1storder_ODESystem(T, args...; kwargs...)
+    ode_system = ode
 
-    # Reduce high-order system to 1st-order (re-ordering to keep the original equations first)
-    # NOTE: need to expand the RHS derivatives before calling order-lowering
-    eqs = expand_derivatives.(equations(_ode))
-    num_orig_eqs = length(eqs)
-    eqs, dvs = ode_order_lowering(eqs, independent_variable(_ode), ModelingToolkit.states(_ode)) 
-    eqs = [eqs[end - num_orig_eqs + 1:end]..., eqs[1:num_orig_eqs]...]
-    dvs = [dvs[end - num_orig_eqs + 1:end]..., dvs[1:num_orig_eqs]...]
-    ode = ODESystem(simplify.(eqs), independent_variable(_ode), dvs, parameters(_ode); name=nameof())
-
-    # Generate variational equations (if any)
-    var_eq_systems = variational_equation_ODESystems(ode; order)
+    if VE_order > 0
+        # Generate variational equations (if any)
+        ode = VarEqODESystem(ode_system, VE_order)
+        ode_system = ode.ode_system
+    elseif VE_order < 0
+        error("Expected VE_order >= 0, got $(VE_order)")
+    end
 
     # Generate the functions
     # TODO: Add support for tgrad (need to define derivative(get_pos) for EphemerisNBP)
-    ode_f = ODEFunction(ode; 
+    ode_f = ODEFunction(ode_system; 
         # Don't need to differentiate further
         jac=false, 
         tgrad=false, 
@@ -36,6 +33,20 @@ function (T::Type{<:Abstract_AstrodynamicalODESystem})(args...; wrap_code=(cse, 
 
     T(ode, ode_f)
 end
+
+@memoize function build_1storder_ODESystem(T, args...; kwargs...)
+    _ode = ODESystem(T, args...; kwargs...)
+
+    # Reduce high-order system to 1st-order (re-ordering to keep the original equations first)
+    # NOTE: need to expand the RHS derivatives before calling order-lowering
+    eqs = expand_derivatives.(equations(_ode))
+    num_orig_eqs = length(eqs)
+    eqs, dvs = ode_order_lowering(eqs, independent_variable(_ode), ModelingToolkit.states(_ode)) 
+    eqs = [eqs[end - num_orig_eqs + 1:end]..., eqs[1:num_orig_eqs]...]
+    dvs = [dvs[end - num_orig_eqs + 1:end]..., dvs[1:num_orig_eqs]...]
+    ODESystem(simplify.(eqs), independent_variable(_ode), dvs, parameters(_ode))
+end
+
 
 @doc """Generic model function."""
 (model::Abstract_AstrodynamicalModel)(args...; kwargs...) = model.ode.ode_f(args...; kwargs...)
