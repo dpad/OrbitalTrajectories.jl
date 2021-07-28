@@ -1,23 +1,15 @@
 export ER3BP
 export elliptical_potential, centrifugal_potential
 
-#-------------#
-# ER3BP MODEL #
-#-------------#
-
-struct ER3BP{P<:R3BPSystemProperties} <: Abstract_R3BPModel
-    props :: P
-end
-
-# Convenience helper
-# const ER3BP = AstrodynamicalSystem{ER3BP_Model}
-ER3BP(args...; kwargs...) = ER3BP(R3BPSystemProperties(args...; kwargs...))
-
 #---------------------------#
 # ER3BP EQUATIONS OF MOTION #
 #---------------------------#
+struct ER3BP_ODESystem{S,F} <: Abstract_AstrodynamicalODESystem
+    ode_system :: S
+    ode_f      :: F
+end
 
-function ModelingToolkit.ODESystem(::Type{ER3BP})
+function ModelingToolkit.ODESystem(::Type{ER3BP_ODESystem})
     @parameters  μ  # Mass fraction
     @parameters  e  # Eccentricity
     @parameters  f  # True anomaly
@@ -39,10 +31,6 @@ function ModelingToolkit.ODESystem(::Type{ER3BP})
     )
 end
 
-#------------------#
-# HELPER FUNCTIONS #
-#------------------#
-
 @doc "Centrifugal potential [DeiTos2017, Eq.13; Ichinomiya 2018, Eq. 2.2]"
 function centrifugal_potential(μ, (x, y, z))
     r = distance_vectors(μ, (x, y, z))
@@ -55,15 +43,17 @@ function elliptical_potential(μ, (x, y, z), f, e)
     return (Ω_3 - 0.5*z^2*e*cos(f)) / (1 + e*cos(f))
 end
 
+# Build the equations at pre-compile time
+const ER3BP_ODEFunctions = ER3BP_ODESystem()
+
+#-------------#
+# ER3BP MODEL #
+#-------------#
+struct ER3BP{O<:ER3BP_ODESystem,P<:R3BPSystemProperties} <: Abstract_R3BPModel{O}
+    ode   :: O
+    props :: P
+end
+ER3BP(args...; kwargs...) = ER3BP(ER3BP_ODEFunctions, R3BPSystemProperties(args...; kwargs...))
+
 # XXX: The parameters overload below gives us a performance boost.
 ModelingToolkit.parameters(model::ER3BP) = SVector(model.props.μ, model.props.e)
-
-#-------------#
-# COMPILATION #
-#-------------#
-
-# Build the equations at pre-compile time
-const ER3BP_ODESystem = ODESystem(ER3BP)
-
-# Retrieve the ER3BP ODESystem at runtime
-ModelingToolkit.ODESystem(::ER3BP) = ER3BP_ODESystem

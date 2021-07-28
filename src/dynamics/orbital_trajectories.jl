@@ -2,66 +2,60 @@ export State, Trajectory
 export primary_body, secondary_body
 export collision, check_distance, crashed
 
-#----------------#
-# ORBITAL STATES #
-#----------------#
+#------------------#
+# ORBITAL PROBLEMS #
+#------------------#
 
-struct State{S<:Abstract_AstrodynamicalSystem,F<:Abstract_ReferenceFrame,uType,tType,isinplace,O<:SciMLBase.AbstractODEProblem{uType,tType,isinplace}} <: SciMLBase.AbstractODEProblem{uType,tType,isinplace}
-    system :: S
+struct State{M<:Abstract_AstrodynamicalModel,F<:Abstract_ReferenceFrame,uType,tType,isinplace,O<:SciMLBase.AbstractODEProblem{uType,tType,isinplace}} <: SciMLBase.AbstractODEProblem{uType,tType,isinplace}
+    model :: M
     frame :: F  # Reference frame that the problem's u0 is defined in
     prob :: O
 end
+State(model::Abstract_AstrodynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::AbstractArray, tspan) =
+    State(model, reference_frame, MArray{Tuple{size(u0)...}}(u0), tspan)
+State(model::Abstract_AstrodynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::StaticArray, tspan) =
+    State(model, reference_frame, ODEProblem(model, u0, tspan, parameters(model)))
+State(model::Abstract_AstrodynamicalModel, u0::AbstractArray, tspan) = State(model, default_reference_frame(model), u0, tspan)
 
-State(system::Abstract_AstrodynamicalSystem, reference_frame::Abstract_ReferenceFrame, u0::AbstractArray, tspan) =
-    State(system, reference_frame, MArray{Tuple{size(u0)...}}(u0), tspan)
-
-State(system::Abstract_AstrodynamicalSystem, reference_frame::Abstract_ReferenceFrame, u0::StaticArray, tspan) =
-    State(system, reference_frame, ODEProblem(system, u0, tspan, parameters(system)))
-
-State(system::Abstract_AstrodynamicalSystem, u0::AbstractArray, tspan) = 
-    State(system, default_reference_frame(system), u0, tspan)
-
-# Remake a State
-DiffEqBase.remake(state::State; kwargs...) = State(state.system, state.frame, remake(state.prob; kwargs...))
-
-# Indexing into a State
-Base.getindex(state::State, idx...) = getindex(state.prob.u0, idx...)
-Base.axes(state::State, idx...) = axes(state.prob, idx...)
-
-#----------------------#
-# ORBITAL TRAJECTORIES #
-#----------------------#
-
-struct Trajectory{S<:Abstract_AstrodynamicalSystem,F<:Abstract_ReferenceFrame,T,N,A,O<:DiffEqBase.AbstractTimeseriesSolution{T,N,A},} <: DiffEqBase.AbstractTimeseriesSolution{T,N,A}
-    system :: S
+struct Trajectory{M<:Abstract_AstrodynamicalModel,F<:Abstract_ReferenceFrame,T,N,A,O<:DiffEqBase.AbstractTimeseriesSolution{T,N,A},} <: DiffEqBase.AbstractTimeseriesSolution{T,N,A}
+    model :: M
     frame :: F  # Reference frame that the solution is defined in
     sol :: O
 end
 
-# Convert a Trajectory back to a State (allowing it to be propagated again)
-State(traj::Trajectory) = State(traj.system, traj.frame, traj.u[begin], (traj.t[begin], traj.t[end]))
+State(traj::Trajectory) = State(traj.model, traj.frame, traj.u[begin], (traj.t[begin], traj.t[end]))
 
-# Properties of a Trajectory
-primary_body(traj::Trajectory) = primary_body(traj.system)
-secondary_body(traj::Trajectory) = secondary_body(traj.system)
+primary_body(state::State) = primary_body(state.model)
+primary_body(traj::Trajectory) = primary_body(traj.model)
+secondary_body(state::State) = secondary_body(state.model)
+secondary_body(traj::Trajectory) = secondary_body(traj.model)
 
-# Indexing into a Trajectory
-Base.getindex(traj::Trajectory, idx...) = State(traj.system, traj.frame, getindex(traj.sol, idx...), (traj.sol.t[idx...], traj.sol.t[idx...]))
-Base.getindex(traj::Trajectory, idx::Int) = State(traj.system, traj.frame, getindex(traj.sol, idx), (traj.sol.t[idx], traj.sol.t[idx]))
-Base.getindex(traj::Trajectory, idx::AbstractArray{Int}) = State(traj.system, traj.frame, getindex(traj.sol, idx), (traj.sol.t[idx], traj.sol.t[idx]))
+DiffEqBase.remake(state::State; kwargs...) = State(state.model, state.frame, remake(state.prob; kwargs...))
+ModelingToolkit.parameters(state::State) = ModelingToolkit.parameters(state.model)
 
+#---------------#
+# INTERPOLATION #
+#---------------#
+
+# Interpolation
+(traj::Trajectory)(t::Number) = State(traj.model, traj.frame, traj.sol(t), (t, t))
+function (traj::Trajectory)(t::AbstractArray{<:Number})
+    new_sol = DiffEqBase.build_solution(traj.prob, traj.alg, t, traj.sol(t); interp=traj.interp, retcode=traj.retcode)
+    return Trajectory(traj.model, traj.frame, new_sol)
+end
+
+# Indexing
+Base.getindex(state::State, idx...) = getindex(state.prob.u0, idx...)
+Base.getindex(traj::Trajectory, idx...) = State(traj.model, traj.frame, getindex(traj.sol, idx...), (traj.sol.t[idx...], traj.sol.t[idx...]))
+Base.getindex(traj::Trajectory, idx::Int) = State(traj.model, traj.frame, getindex(traj.sol, idx), (traj.sol.t[idx], traj.sol.t[idx]))
+Base.getindex(traj::Trajectory, idx::AbstractArray{Int}) = State(traj.model, traj.frame, getindex(traj.sol, idx), (traj.sol.t[idx], traj.sol.t[idx]))
+Base.axes(state::State, idx...) = axes(state.prob, idx...)
+Base.axes(traj::Trajectory, idx...) = axes(traj.sol, idx...)
 Base.firstindex(traj::Trajectory) = firstindex(traj.sol)
 Base.firstindex(traj::Trajectory, idx) = firstindex(traj.sol, idx)
-
 Base.lastindex(traj::Trajectory) = lastindex(traj.sol)
 Base.lastindex(traj::Trajectory, idx) = lastindex(traj.sol, idx)
-
-Base.axes(traj::Trajectory, idx...) = axes(traj.sol, idx...)
 Base.size(traj::Trajectory) = size(traj.sol)
-
-#----------------------#
-# PROPERTIES           #
-#----------------------#
 
 function Base.getproperty(x::T, b::Symbol) where {T<:Union{State,Trajectory}}
     if hasfield(T, b)
@@ -71,33 +65,18 @@ function Base.getproperty(x::T, b::Symbol) where {T<:Union{State,Trajectory}}
     end
 end
 
-#---------------#
-# INTERPOLATION #
-#---------------#
-
-# Interpolation of a Trajectory at time t
-(traj::Trajectory)(t::Number) = State(traj.system, traj.frame, traj.sol(t), (t, t))
-
-# Interpolation of a Trajectory at any list of times t
-function (traj::Trajectory)(t::AbstractArray{<:Number})
-    new_sol = DiffEqBase.build_solution(traj.prob, traj.alg, t, traj.sol(t); interp=traj.interp, retcode=traj.retcode)
-    return Trajectory(traj.system, traj.frame, new_sol)
-end
-
 #---------#
 # DISPLAY #
 #---------#
 
-Base.show(io::IO, ::MIME"text/plain", ::Type{S}) where {M2,R,S<:State{<:Abstract_AstrodynamicalSystem{M2},R}} =
-    print(io, "State{$(nameof(M2)),$(nameof(R))}")
-
-function Base.show(io::IO, M::MIME"text/plain", state::State{S}) where {M2,S<:Abstract_AstrodynamicalSystem{M2}}
+Base.show(io::IO, ::MIME"text/plain", ::Type{S}) where {M,R,S<:State{M,R}} = print(io, "State{$(nameof(M)),$(nameof(R))}")
+function Base.show(io::IO, M::MIME"text/plain", state::State)
     if get(io, :compact, false)
-        print(io, "State{$(nameof(M2))}(t=$(state.prob.tspan), u0=$(state.prob.u0))")
+        print(io, "State{$(nameof(typeof(state.model)))}(t=$(state.prob.tspan), u0=$(state.prob.u0))")
     else
         print(io, string(
             SciMLBase.TYPE_COLOR, nameof(typeof(state)), SciMLBase.NO_COLOR, " in "))
-        show(io, M, state.system)
+        show(io, M, state.model)
         print(io, string(SciMLBase.NO_COLOR, " in ", SciMLBase.TYPE_COLOR))
         show(io, M, state.frame)
         println("\n", string(
@@ -107,17 +86,14 @@ function Base.show(io::IO, M::MIME"text/plain", state::State{S}) where {M2,S<:Ab
         )
     end
 end
-
-Base.show(io::IO, ::MIME"text/plain", ::Type{T}) where {M,R,T<:Trajectory{M,R}} =
-    print(io, "Trajectory{$(nameof(M)),$(nameof(R))}")
-
+Base.show(io::IO, ::MIME"text/plain", ::Type{T}) where {M,R,T<:Trajectory{M,R}} = print(io, "Trajectory{$(nameof(M)),$(nameof(R))}")
 function Base.show(io::IO, ::MIME"text/plain", A::Trajectory)
     if get(io, :compact, false)
-        print(io, "Trajectory{$(nameof(typeof(A.system)))}(t=$((A.t[begin], A.t[end])))")
+        print(io, "Trajectory{$(nameof(typeof(A.model)))}(t=$((A.t[begin], A.t[end])))")
     else
         println(io, string(
             SciMLBase.TYPE_COLOR, nameof(typeof(A)), SciMLBase.NO_COLOR, " in ",
-            SciMLBase.TYPE_COLOR, A.system, SciMLBase.NO_COLOR, " in ",
+            SciMLBase.TYPE_COLOR, A.model, SciMLBase.NO_COLOR, " in ",
             SciMLBase.TYPE_COLOR, A.frame, SciMLBase.NO_COLOR))
         println(io, string(
             "    retcode  = $(A.retcode) [$(length(A.t)) timesteps]\n",
@@ -128,21 +104,21 @@ function Base.show(io::IO, ::MIME"text/plain", A::Trajectory)
     end
 end
 
-#-----------------------------------#
-# PROPAGATION (STATE -> TRAJECTORY) #
-#-----------------------------------#
+#-------#
+# SOLVE #
+#-------#
 
 const DEFAULT_ALG = Vern7();
 
 # XXX: Required to support solving a State problem.
-DiffEqBase.solve(state::State, alg=DEFAULT_ALG, args...; reltol=1e-10, abstol=1e-10, kwargs...) =
-    DiffEqBase.__solve(state.system, state, alg, args...; reltol, abstol, kwargs...)
+DiffEqBase.solve(state::State, args...; reltol=1e-10, abstol=1e-10, kwargs...) =
+    DiffEqBase.__solve(state, args...; reltol, abstol, kwargs...)
+
+DiffEqBase.__solve(state::State; kwargs...) = DiffEqBase.__solve(state, DEFAULT_ALG; kwargs...)
 
 # The __solve() method does the actual heavy lifting, including converting to a Trajectory.
-function DiffEqBase.__solve(state::State, alg::OrdinaryDiffEqAlgorithm; 
-        userdata=Dict(), callback=nothing, kwargs...)
-
-    default_frame = default_reference_frame(state.system)
+function DiffEqBase.__solve(state::State, alg::OrdinaryDiffEqAlgorithm; userdata=Dict(), callback=nothing, kwargs...)
+    default_frame = default_reference_frame(state.model)
     real_state = convert_to_frame(state, default_frame)
 
     # Pass the default state into the underlying solver
@@ -155,7 +131,5 @@ function DiffEqBase.__solve(state::State, alg::OrdinaryDiffEqAlgorithm;
 
     # Call the underlying solver
     raw_sol = solve(real_state.prob, alg; userdata, callback, kwargs...)
-
-    # Save as a Trajectory
-    return Trajectory(state.system, default_frame, raw_sol)
+    return Trajectory(state.model, default_frame, raw_sol)
 end

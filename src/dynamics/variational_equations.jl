@@ -4,6 +4,12 @@
 
 export with_var_eqs
 
+@doc """
+    Generate ODE Systems that compute the State Transition
+    Tensors simultaneously with the given system. This requires the system
+    to have a computable Jacobian function.
+"""
+
 const MAX_VE_ORDER = 2
 
 struct VarEqODESystem{Order, F} <: Abstract_VariationalEquationsODESystem{Order}
@@ -39,21 +45,14 @@ function State(model::ModelWithVarEqs{Order}, reference_frame::Abstract_Referenc
     State(model, reference_frame, ODEProblem(model, u0, prob.tspan, parameters(model)))
 end
 
-function with_var_eqs(model::M, order=1; force=false, kwargs...) where {O<:ModelingToolkit.AbstractODESystem,M<:Abstract_AstrodynamicalModel{O}}
-    # Create the original model and get the system ODE
+function with_var_eqs(model::Abstract_AstrodynamicalModel, order=1; force=false, kwargs...)
+    # Get the system ODE
     if model.ode isa Abstract_VariationalEquationsODESystem && !force
         error("Cannot build variational equations for an already variational system (unless you set force=true)!")
     end
-    VE_system = VarEqODESystem(model.ode.ode_system, order; kwargs...)
-    props = model.props
-    M(VE_system, props)
+    VarEqODESystem(model.ode.ode_system, order; kwargs...)
 end
 
-@doc """
-    Generate ODE Systems that compute the State Transition
-    Tensors simultaneously with the given system. This requires the system
-    to have a computable Jacobian function.
-"""
 @memoize function VarEqODESystem(system::ODESystem, order; wrap_code=(cse, cse))
     if order < 1
         error("Expected order >= 1 for variational equations (got $(order)).")
