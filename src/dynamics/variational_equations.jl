@@ -25,13 +25,20 @@ function Base.getproperty(x::T, b::Symbol) where {T<:VarEqModel}
         return getproperty(x.model, b)
     end
 end
+default_reference_frame(model::VarEqModel) = default_reference_frame(model.model)
+ModelingToolkit.parameters(model::VarEqModel) = parameters(model.model)
+state_length(m::VarEqModel) = state_length(m.model)
 
 Base.show(io::IO, ::MIME"text/plain", x::Abstract_VariationalEquationsODESystem{Order}) where {Order} = print(io, string(" with ", SciMLBase.TYPE_COLOR, "order-$(Order) var.eqs.", SciMLBase.NO_COLOR))
 
 @doc """Generic State with default initial values for VarEq systems."""
-function State(model::VarEqModel{Order}, reference_frame::Abstract_ReferenceFrame, prob::Prob) where {Order,uType,Prob<:SciMLBase.AbstractODEProblem{uType}}
+function State(model::VarEqModel{Order}, state::State) where {Order}
+    prob = state.prob
+    reference_frame = state.frame
+
     # Get the problem u0
     u0 = convert(Array, prob.u0)
+    uType = eltype(u0)
 
     # Get the model dimensions
     dim = length(states(model.model.ode))

@@ -44,7 +44,7 @@ function solve_sensitivity(::Val{:VariationalEquations}, state::State, args...; 
     vareq_model = with_var_eqs(state.model, order)
 
     # Rebuild the state
-    new_state = State(vareq_model, state.frame, state.prob)
+    new_state = State(vareq_model, state)
 
     # Solve with variational equations
     return solve(new_state, args...; kwargs...)
