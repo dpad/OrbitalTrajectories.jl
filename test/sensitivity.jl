@@ -92,9 +92,11 @@ end
     ode_system = system.ode.ode_system
     ode_f = system.ode.ode_f
 
-    using ModelingToolkit
+    # using ModelingToolkit
 
-    test = OrbitalTrajectories.Dynamics.add_variational_equations(ode_system, 1)
+    test = OrbitalTrajectories.Dynamics.VarEqODESystem(ode_system, 1)
+
+    system = CR3BP(:moon, :earth; VE_order=1)
 
     OrbitalTrajectories.Dynamics.STM_ODEFunction(ode_system, ode_f)
 end

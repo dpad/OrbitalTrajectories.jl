@@ -8,19 +8,10 @@ import ..cse
 @doc """Generic constructor for a DynamicalModel's underlying ODEFunctions."""
 function (T::Type{<:Abstract_AstrodynamicalODESystem})(args...; wrap_code=(cse, cse), VE_order=0, kwargs...)
     ode = build_1storder_ODESystem(T, args...; kwargs...)
-    ode_system = ode
-
-    if VE_order > 0
-        # Generate variational equations (if any)
-        ode = VarEqODESystem(ode_system, VE_order)
-        ode_system = ode.ode_system
-    elseif VE_order < 0
-        error("Expected VE_order >= 0, got $(VE_order)")
-    end
 
     # Generate the functions
     # TODO: Add support for tgrad (need to define derivative(get_pos) for EphemerisNBP)
-    ode_f = ODEFunction(ode_system; 
+    ode_f = ODEFunction(ode; 
         # Don't need to differentiate further
         jac=false, 
         tgrad=false, 
@@ -49,13 +40,16 @@ end
 
 
 @doc """Generic model function."""
-(model::Abstract_AstrodynamicalModel)(args...; kwargs...) = model.ode.ode_f(args...; kwargs...)
+(model::Abstract_AstrodynamicalModel)(args...; kwargs...) = model.ode(args...; kwargs...)
+
+@doc """Generic ODEFunction."""
+(ode::Abstract_AstrodynamicalODESystem)(args...; kwargs...) = ode.ode_f(args...; kwargs...)
 
 #---------#
 # DISPLAY #
 #---------#
 Base.show(io::IO, x::Abstract_AstrodynamicalModel) = show(io, typeof(x))
-Base.show(io::IO, x::Type{<:Abstract_AstrodynamicalModel}) = print(io, nameof(x))
+Base.show(io::IO, ::Type{T}) where {T<:Abstract_AstrodynamicalModel} = print(io, nameof(T))
 ModelingToolkit.varmap_to_vars(model::Abstract_AstrodynamicalModel, varmap) = ModelingToolkit.varmap_to_vars(varmap, parameters(model))
 DiffEqBase.isinplace(f::Abstract_AstrodynamicalModel) = true
 DiffEqBase.isinplace(f::Abstract_AstrodynamicalModel, _) = isinplace(f)

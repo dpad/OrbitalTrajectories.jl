@@ -47,7 +47,7 @@ const BC4BP_ODEFunctions = BC4BP_ODESystem()
 #-------------#
 # BC4BP MODEL #
 #-------------#
-struct BC4BP{O<:BC4BP_ODESystem,P<:R4BPSystemProperties} <: Abstract_R3BPModel
+struct BC4BP{O<:BC4BP_ODESystem,P<:R4BPSystemProperties} <: Abstract_R4BPModel{O}
     ode   :: O
     props :: P
 end

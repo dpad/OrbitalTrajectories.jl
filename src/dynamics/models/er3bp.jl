@@ -49,7 +49,7 @@ const ER3BP_ODEFunctions = ER3BP_ODESystem()
 #-------------#
 # ER3BP MODEL #
 #-------------#
-struct ER3BP{O<:ER3BP_ODESystem,P<:R3BPSystemProperties} <: Abstract_R3BPModel
+struct ER3BP{O<:ER3BP_ODESystem,P<:R3BPSystemProperties} <: Abstract_R3BPModel{O}
     ode   :: O
     props :: P
 end

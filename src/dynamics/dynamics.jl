@@ -33,11 +33,13 @@ module Dynamics
     #----------------#
 
     # Dynamical models
-    abstract type Abstract_AstrodynamicalModel end
     abstract type Abstract_AstrodynamicalODESystem <: ModelingToolkit.AbstractODESystem end
-    abstract type Abstract_VariationalEquationsODESystem <: ModelingToolkit.AbstractODESystem end
-    abstract type Abstract_R3BPModel <: Abstract_AstrodynamicalModel end
-    abstract type Abstract_R4BPModel <: Abstract_AstrodynamicalModel end
+    abstract type Abstract_VariationalEquationsODESystem{Order} <: ModelingToolkit.AbstractODESystem end
+    abstract type Abstract_AstrodynamicalModel{ODESystem} end
+
+    # Specific abstract models
+    abstract type Abstract_R3BPModel{ODESystem} <: Abstract_AstrodynamicalModel{ODESystem} end
+    abstract type Abstract_R4BPModel{ODESystem} <: Abstract_AstrodynamicalModel{ODESystem} end
 
     # Reference frames
     abstract type Abstract_ReferenceFrame end
@@ -54,8 +56,8 @@ module Dynamics
     include("orbital_trajectories.jl")
     include("reference_frames.jl")
     include("sensitivities.jl")
-    include("dynamical_models.jl")
     include("variational_equations.jl")
+    include("dynamical_models.jl")
     include("differential_correction.jl")
     include("plotting.jl")
 end

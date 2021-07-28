@@ -75,7 +75,7 @@ end
 #---------------------#
 # EPHEMERIS-NBP MODEL #
 #---------------------#
-struct EphemerisNBP{O<:NBP_ODESystem,P<:NBPSystemProperties} <: Abstract_AstrodynamicalModel
+struct EphemerisNBP{O<:NBP_ODESystem,P<:NBPSystemProperties} <: Abstract_AstrodynamicalModel{O}
     ode   :: O
     props :: P
 end

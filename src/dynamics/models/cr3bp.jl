@@ -23,42 +23,65 @@ const CR3BP_ODEFunctions = CR3BP_ODESystem()
 #-------------#
 # CR3BP MODEL #
 #-------------#
-struct CR3BP{handcoded,O<:CR3BP_ODESystem,P<:R3BPSystemProperties} <: Abstract_R3BPModel
+
+struct CR3BP{O<:Abstract_AstrodynamicalODESystem,P<:R3BPSystemProperties} <: Abstract_R3BPModel{O}
     ode   :: O
     props :: P
 end
 
+CR3BP(args...; kwargs...) = CR3BP(R3BPSystemProperties(args...; kwargs...))
+
 # TODO: Move hand-coded functions into :analytical of CR3BP
-CR3BP(args...; kwargs...) = CR3BP{Val{false}}(R3BPSystemProperties(args...; kwargs...))
-function CR3BP{nothandcoded}(props::R3BPSystemProperties; kwargs...) where {nothandcoded<:Val{false}} 
+function CR3BP(props::R3BPSystemProperties; kwargs...)
     if length(kwargs) == 0
         ode = CR3BP_ODEFunctions
     else
         ode = CR3BP_ODESystem(; kwargs...)
     end
-    CR3BP{false, typeof(ode), typeof(props)}(ode, props)
+    CR3BP{typeof(ode), typeof(props)}(ode, props)
 end
 
 # XXX: The parameters overload below gives us a performance boost.
-ModelingToolkit.parameters(model::CR3BP{false}) = SVector(model.props.μ)
-
-# Hand-coded CR3BP
-HandcodedCR3BP(args...; kwargs...) = CR3BP{Val{true}}(R3BPSystemProperties(args...; kwargs...))
-function CR3BP{handcoded}(props::R3BPSystemProperties) where {handcoded<:Val{true}} 
-    ode = CR3BP_ODESystem(nothing, handcodedCR3BP, handcodedCR3BP_withSTM)
-    CR3BP{true, typeof(ode), typeof(props)}(ode, props)
-end
-ModelingToolkit.parameters(model::CR3BP{true}) = SVector(model.props.μ)
-
-state_length(::CR3BP{true}) = 6
+ModelingToolkit.parameters(model::CR3BP) = SVector(model.props.μ)
 
 #---------#
 # METHODS #
 #---------#
+
 @doc "Jacobi integral = 2U - V^2 = -2E [Oshima 2019, Eq. 3; Koon, Eq. 2.3.13; Wakker, Eq. 3.54]"
 jacobi(μ, vel, pos) = 2*centrifugal_potential(μ, pos) - norm(vel)^2
 
-function handcodedCR3BP(du, u, p, t)
+
+#---------------------------#
+# HANDCODED CR3BP FUNCTIONS #
+#---------------------------#
+
+# Hand-coded CR3BP
+struct HandcodedCR3BP_ODESystem{F} <: Abstract_AstrodynamicalODESystem
+    ode_f      :: F
+end
+struct HandcodedCR3BP_VarEqODESystem{Order,F} <: Abstract_VariationalEquationsODESystem{Order}
+    ode_f      :: F
+end
+
+const CR3BP_with_Handcoded = CR3BP{<:Union{HandcodedCR3BP_ODESystem,HandcodedCR3BP_VarEqODESystem}}
+
+HandcodedCR3BP(args...; kwargs...) = HandcodedCR3BP(R3BPSystemProperties(args...; kwargs...))
+function HandcodedCR3BP(props::R3BPSystemProperties; kwargs...)
+    ode = HandcodedCR3BP_ODESystem(handcodedCR3BP_f)
+    CR3BP{typeof(ode), typeof(props)}(ode, props)
+end
+
+ModelingToolkit.parameters(model::CR3BP_with_Handcoded) = SVector(model.props.μ)
+state_length(::CR3BP_with_Handcoded) = 6
+
+function with_var_eqs(model::CR3BP{<:HandcodedCR3BP_ODESystem}, order=1)
+    order == 1 || error("HandcodedCR3BP only supports 1st-order variational equations!")
+    ode = HandcodedCR3BP_VarEqODESystem{1}(handcodedCR3BP_withSTM_f)
+    CR3BP{typeof(ode), typeof(model.props)}(ode, model.props)
+end
+
+function handcodedCR3BP_f(du, u, p, t)
     @inbounds begin
         μ = p[1]
         x, y, z, x̂, ŷ, ẑ = u
@@ -72,7 +95,7 @@ function handcodedCR3BP(du, u, p, t)
     end
 end
 
-function handcodedCR3BP_withSTM(du, u, p, t)
+function handcodedCR3BP_withSTM_f(du, u, p, t)
     @inbounds begin
         μ = p[1]
         x, y, z, x̂, ŷ, ẑ = u
