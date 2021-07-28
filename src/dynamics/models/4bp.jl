@@ -7,7 +7,7 @@ default_reference_frame(::Abstract_R4BPModel) = SynodicFrame()
 #-------------------#
 # SYSTEM PROPERTIES # 
 #-------------------#
-struct R4BPSystemProperties{N<:Number}
+struct R4BPSystemProperties{N<:Number} <: Abstract_ModelProperties
     b1 :: Symbol  # Identifier of body 1 (central body)
     b2 :: Symbol  # Identifier of body 2 (smaller body)
     b3 :: Symbol  # Identifier of body 3 (large distance body)

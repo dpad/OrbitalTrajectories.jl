@@ -24,7 +24,7 @@ const CR3BP_ODEFunctions = CR3BP_ODESystem()
 # CR3BP MODEL #
 #-------------#
 
-struct CR3BP{O<:Abstract_AstrodynamicalODESystem,P<:R3BPSystemProperties} <: Abstract_R3BPModel{O}
+struct CR3BP{O<:Abstract_AstrodynamicalODESystem,P<:R3BPSystemProperties} <: Abstract_R3BPModel
     ode   :: O
     props :: P
 end

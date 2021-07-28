@@ -4,31 +4,37 @@
 
 export with_var_eqs
 
-@doc """
-    Generate ODE Systems that compute the State Transition
-    Tensors simultaneously with the given system. This requires the system
-    to have a computable Jacobian function.
-"""
-
 const MAX_VE_ORDER = 2
 
-struct VarEqODESystem{Order, F} <: Abstract_VariationalEquationsODESystem{Order}
-    ode_system  :: ODESystem   # The full combined system
-    ode_f       :: F           # The full systemfunction
+struct VarEqModel_ODESystem{Order, F} <: Abstract_AstrodynamicalODESystem
+    ode_system  :: ODESystem   # The full combined ODE system
+    ode_f       :: F           # The full ODE system function
     VE_system   :: ODESystem   # Only the differential variational equations for this order
     jacobian    :: Array{Num}  # Stores the symbolic jacobian expressions
 end
+
+struct VarEqModel{Order, O<:VarEqModel_ODESystem{Order}, M<:Abstract_AstrodynamicalModel} <: Abstract_AstrodynamicalModel
+    ode         :: O  # The new ODE system
+    model       :: M  # The original model
+end
+
+function Base.getproperty(x::T, b::Symbol) where {T<:VarEqModel}
+    if hasfield(T, b)
+        return getfield(x, b)
+    else
+        return getproperty(x.model, b)
+    end
+end
+
 Base.show(io::IO, ::MIME"text/plain", x::Abstract_VariationalEquationsODESystem{Order}) where {Order} = print(io, string(" with ", SciMLBase.TYPE_COLOR, "order-$(Order) var.eqs.", SciMLBase.NO_COLOR))
 
-const ModelWithVarEqs{Order} = Abstract_AstrodynamicalModel{<:Abstract_VariationalEquationsODESystem{Order}}
-
 @doc """Generic State with default initial values for VarEq systems."""
-function State(model::ModelWithVarEqs{Order}, reference_frame::Abstract_ReferenceFrame, prob::Prob) where {Order,uType,tType,isinplace,Prob<:SciMLBase.AbstractODEProblem{uType,tType,isinplace}}
+function State(model::VarEqModel{Order}, reference_frame::Abstract_ReferenceFrame, prob::Prob) where {Order,uType,Prob<:SciMLBase.AbstractODEProblem{uType}}
     # Get the problem u0
-    u0 = prob.u0
+    u0 = convert(Array, prob.u0)
 
     # Get the model dimensions
-    dim = length(states(model))
+    dim = length(states(model.model.ode))
 
     if length(u0) == dim && Order > 0
         # User only provided initial state vector.
@@ -42,18 +48,24 @@ function State(model::ModelWithVarEqs{Order}, reference_frame::Abstract_Referenc
             append!(u0, zeros(eltype(uType), dim^(order+1)))
         end
     end
-    State(model, reference_frame, ODEProblem(model, u0, prob.tspan, parameters(model)))
+    State(model, reference_frame, ODEProblem(model, u0, prob.tspan, parameters(model.model)))
 end
 
-function with_var_eqs(model::Abstract_AstrodynamicalModel, order=1; force=false, kwargs...)
-    # Get the system ODE
+function with_var_eqs(model::M, order=1; force=false, kwargs...) where {M<:Abstract_AstrodynamicalModel}
+    # Create the original model and get the system ODE
     if model.ode isa Abstract_VariationalEquationsODESystem && !force
         error("Cannot build variational equations for an already variational system (unless you set force=true)!")
     end
-    VarEqODESystem(model.ode.ode_system, order; kwargs...)
+    VE_system = VarEqModel_ODESystem(model.ode.ode_system, order; kwargs...)
+    VarEqModel{order, typeof(VE_system), typeof(model)}(VE_system, model)
 end
 
-@memoize function VarEqODESystem(system::ODESystem, order; wrap_code=(cse, cse))
+@doc """
+    Generate ODE Systems that compute the State Transition
+    Tensors simultaneously with the given system. This requires the system
+    to have a computable Jacobian function.
+"""
+@memoize function VarEqModel_ODESystem(system::ODESystem, order; wrap_code=(cse, cse))
     if order < 1
         error("Expected order >= 1 for variational equations (got $(order)).")
     elseif order > MAX_VE_ORDER
@@ -66,7 +78,7 @@ end
     dim = length(dvs)
 
     # Build all models for lower orders (should be memoized so should not be expensive)
-    vareqs = [VarEqODESystem(system, N) for N in  1:order-1]
+    vareqs = [VarEqModel(system, N) for N in  1:order-1]
     systems = [system, [sys.VE_system for sys in vareqs]...]
     jacs = Array{Num}[reshape(sys.jacobian, ntuple(_->dim, N+1)) for (N, sys) in enumerate(vareqs)]
     ϕ = Array{Num}[reshape(states(sys), ntuple(_->dim, N+1)) for (N, sys) in enumerate(systems[2:end])]
@@ -110,7 +122,7 @@ end
         wrap_code
     )
 
-    return VarEqODESystem{order, typeof(ode_f)}(full_system, ode_f, systems[end], jacs[end])
+    return VarEqModel_ODESystem{order, typeof(ode_f)}(full_system, ode_f, systems[end], jacs[end])
 end
 
 function STT_diff_contraction(::Val{1}, jacs, ϕ)

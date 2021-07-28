@@ -10,7 +10,7 @@ default_reference_frame(::Abstract_R3BPModel) = SynodicFrame()
 #-------------------#
 # SYSTEM PROPERTIES # 
 #-------------------#
-struct R3BPSystemProperties{L <: Unitful.Length, V <: Unitful.Velocity, T <: Unitful.Time}
+struct R3BPSystemProperties{L <: Unitful.Length, V <: Unitful.Velocity, T <: Unitful.Time} <: Abstract_ModelProperties
     b1 :: Symbol        # Identifier of body 1
     b2 :: Symbol        # Identifier of body 1
     μ  :: Float64       # Mass ratio

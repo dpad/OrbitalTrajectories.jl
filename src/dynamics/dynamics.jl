@@ -35,11 +35,12 @@ module Dynamics
     # Dynamical models
     abstract type Abstract_AstrodynamicalODESystem <: ModelingToolkit.AbstractODESystem end
     abstract type Abstract_VariationalEquationsODESystem{Order} <: ModelingToolkit.AbstractODESystem end
-    abstract type Abstract_AstrodynamicalModel{ODESystem} end
+    abstract type Abstract_AstrodynamicalModel end
+    abstract type Abstract_ModelProperties end
 
     # Specific abstract models
-    abstract type Abstract_R3BPModel{ODESystem} <: Abstract_AstrodynamicalModel{ODESystem} end
-    abstract type Abstract_R4BPModel{ODESystem} <: Abstract_AstrodynamicalModel{ODESystem} end
+    abstract type Abstract_R3BPModel <: Abstract_AstrodynamicalModel end
+    abstract type Abstract_R4BPModel <: Abstract_AstrodynamicalModel end
 
     # Reference frames
     abstract type Abstract_ReferenceFrame end

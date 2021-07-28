@@ -4,7 +4,7 @@ export get_state
 #----------------#
 # N-BODY SYSTEMS #
 #----------------#
-struct NBPSystemProperties{N}
+struct NBPSystemProperties{N} <: Abstract_ModelProperties
     center :: Symbol
     center_id :: Integer
     bodies :: SVector{N, Symbol}
@@ -75,7 +75,7 @@ end
 #---------------------#
 # EPHEMERIS-NBP MODEL #
 #---------------------#
-struct EphemerisNBP{O<:NBP_ODESystem,P<:NBPSystemProperties} <: Abstract_AstrodynamicalModel{O}
+struct EphemerisNBP{O<:NBP_ODESystem,P<:NBPSystemProperties} <: Abstract_AstrodynamicalModel
     ode   :: O
     props :: P
 end
