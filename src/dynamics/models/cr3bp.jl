@@ -66,6 +66,13 @@ end
 
 const CR3BP_with_Handcoded = CR3BP{<:Union{HandcodedCR3BP_ODESystem,HandcodedCR3BP_VarEqODESystem}}
 
+function Base.show(io::IO, M::MIME"text/plain", x::CR3BP_with_Handcoded)
+    print(io, string(SciMLBase.TYPE_COLOR, nameof(typeof(x)), SciMLBase.NO_COLOR))
+    show(io, M, x.props)
+    show(io, M, x.ode)
+    print(io, " with hand-coded equations")
+end
+
 HandcodedCR3BP(args...; kwargs...) = HandcodedCR3BP(R3BPSystemProperties(args...; kwargs...))
 function HandcodedCR3BP(props::R3BPSystemProperties; kwargs...)
     ode = HandcodedCR3BP_ODESystem(handcodedCR3BP_f)

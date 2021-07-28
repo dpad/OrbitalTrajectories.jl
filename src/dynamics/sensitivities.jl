@@ -174,8 +174,8 @@ end
 Broadcast.broadcastable(stm::StateTransitionMatrix) = stm.tensors[1]
 
 # Display STTs/STMs.
-Base.show(io::IO, x::StateTransitionTensor{Order,Out,In}) where {Order,Out,In} = print(io, string(SciMLBase.TYPE_COLOR, "STT{$(Order)}", SciMLBase.NO_COLOR, "($(In)=>$(Out), t=$(x.tspan))"))
-Base.show(io::IO, x::StateTransitionMatrix{Out,In}) where {Out,In} = print(io, string(SciMLBase.TYPE_COLOR, "STM", SciMLBase.NO_COLOR, "($(In)=>$(Out), t=$(x.tspan))"))
+Base.show(io::IO, ::MIME"text/plain", x::StateTransitionTensor{Order,Out,In}) where {Order,Out,In} = print(io, string(SciMLBase.TYPE_COLOR, "STT{$(Order)}", SciMLBase.NO_COLOR, "($(In)=>$(Out), t=$(x.tspan))"))
+Base.show(io::IO, ::MIME"text/plain", x::StateTransitionMatrix{Out,In}) where {Out,In} = print(io, string(SciMLBase.TYPE_COLOR, "STM", SciMLBase.NO_COLOR, "($(In)=>$(Out), t=$(x.tspan))"))
 
 # Comparison
 Base.isapprox(stt1::S, stt2::S; kwargs...) where {N,Out,In,S<:StateTransitionTensor{N,Out,In}} = all(isapprox.(stt1.tensors, stt2.tensors; kwargs...))

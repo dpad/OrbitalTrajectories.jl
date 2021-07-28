@@ -4,8 +4,6 @@
 
 default_reference_frame(::Abstract_R4BPModel) = SynodicFrame()
 
-Base.show(io::IO, x::Abstract_R4BPModel) = print(io, "$(nameof(typeof(x)))$(x.props)")
-
 #-------------------#
 # SYSTEM PROPERTIES # 
 #-------------------#
@@ -40,7 +38,7 @@ function R4BPSystemProperties(a::Symbol, b::Symbol, c::Symbol, α0::Number=0.; k
     R4BPSystemProperties(a, b, c, m3, a3, ω3, μ, μ2, α0)
 end
 
-Base.show(io::IO, x::R4BPSystemProperties) = print(io, parameters(x))#(a=x.b1, b=x.b2, c=x.b3, α0=x.α0))
+Base.show(io::IO, ::MIME"text/plain", x::R4BPSystemProperties) = print(io, parameters(x))#(a=x.b1, b=x.b2, c=x.b3, α0=x.α0))
 ModelingToolkit.parameters(props::R4BPSystemProperties) = NamedTuple([i => getfield(props, i) for i in propertynames(props)])
 ModelingToolkit.parameters(model::Abstract_R4BPModel) = [getfield(model.props, i.name) for i in ModelingToolkit.parameters(model.ode.ode_system)]
 

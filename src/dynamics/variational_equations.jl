@@ -18,6 +18,7 @@ struct VarEqODESystem{Order, F} <: Abstract_VariationalEquationsODESystem{Order}
     VE_system   :: ODESystem   # Only the differential variational equations for this order
     jacobian    :: Array{Num}  # Stores the symbolic jacobian expressions
 end
+Base.show(io::IO, ::MIME"text/plain", x::Abstract_VariationalEquationsODESystem{Order}) where {Order} = print(io, string(" with ", SciMLBase.TYPE_COLOR, "order-$(Order) var.eqs.", SciMLBase.NO_COLOR))
 
 const ModelWithVarEqs{Order} = Abstract_AstrodynamicalModel{<:Abstract_VariationalEquationsODESystem{Order}}
 

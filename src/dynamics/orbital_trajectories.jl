@@ -69,26 +69,39 @@ end
 # DISPLAY #
 #---------#
 
-Base.show(io::IO, A::State) = println(io, summary(A))
-Base.summary(state::State) = string(
-    SciMLBase.TYPE_COLOR, nameof(typeof(state)), SciMLBase.NO_COLOR, " in ",
-    SciMLBase.TYPE_COLOR, state.model, SciMLBase.NO_COLOR, " in ",
-    SciMLBase.TYPE_COLOR, state.frame, "\n",
-    "    ", SciMLBase.NO_COLOR, "Underlying ", summary(state.prob), "\n",
-    "    ", SciMLBase.NO_COLOR, "tspan = ", state.prob.tspan, "\n",
-    "    u0    = ", state.prob.u0)
-Base.show(io::IO, m::MIME"text/plain", A::Trajectory) = show(io, A) # XXX: Required because also defined in DiffEqBase
-function Base.show(io::IO, A::Trajectory)
-    println(io, string(
-        SciMLBase.TYPE_COLOR, nameof(typeof(A)), SciMLBase.NO_COLOR, " in ",
-        SciMLBase.TYPE_COLOR, A.model, SciMLBase.NO_COLOR, " in ",
-        SciMLBase.TYPE_COLOR, A.frame, SciMLBase.NO_COLOR))
-    println(io, string(
-        "    retcode  = $(A.retcode) [$(length(A.t)) timesteps]\n",
-        "    t        = ($(A.t[begin]), $(A.t[end]))\n",
-        "    u[begin] = $(A.u[begin])\n",
-        "    u[end]   = $(A.u[end])\n"
-    ))
+Base.show(io::IO, ::MIME"text/plain", ::Type{S}) where {M,R,S<:State{M,R}} = print(io, "State{$(nameof(M)),$(nameof(R))}")
+function Base.show(io::IO, M::MIME"text/plain", state::State)
+    if get(io, :compact, false)
+        print(io, "State{$(nameof(typeof(state.model)))}(t=$(state.prob.tspan), u0=$(state.prob.u0))")
+    else
+        print(io, string(
+            SciMLBase.TYPE_COLOR, nameof(typeof(state)), SciMLBase.NO_COLOR, " in "))
+        show(io, M, state.model)
+        print(io, string(SciMLBase.NO_COLOR, " in ", SciMLBase.TYPE_COLOR))
+        show(io, M, state.frame)
+        println("\n", string(
+        "    ", SciMLBase.NO_COLOR, "Underlying ", summary(state.prob), "\n",
+        "    ", SciMLBase.NO_COLOR, "tspan = ", state.prob.tspan, "\n",
+        "    u0    = ", state.prob.u0)
+        )
+    end
+end
+Base.show(io::IO, ::MIME"text/plain", ::Type{T}) where {M,R,T<:Trajectory{M,R}} = print(io, "Trajectory{$(nameof(M)),$(nameof(R))}")
+function Base.show(io::IO, ::MIME"text/plain", A::Trajectory)
+    if get(io, :compact, false)
+        print(io, "Trajectory{$(nameof(typeof(A.model)))}(t=$((A.t[begin], A.t[end])))")
+    else
+        println(io, string(
+            SciMLBase.TYPE_COLOR, nameof(typeof(A)), SciMLBase.NO_COLOR, " in ",
+            SciMLBase.TYPE_COLOR, A.model, SciMLBase.NO_COLOR, " in ",
+            SciMLBase.TYPE_COLOR, A.frame, SciMLBase.NO_COLOR))
+        println(io, string(
+            "    retcode  = $(A.retcode) [$(length(A.t)) timesteps]\n",
+            "    t        = ($(A.t[begin]), $(A.t[end]))\n",
+            "    u[begin] = $(A.u[begin])\n",
+            "    u[end]   = $(A.u[end])\n"
+        ))
+    end
 end
 
 #-------#

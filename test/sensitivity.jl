@@ -31,6 +31,8 @@ using ForwardDiff
         STT2_norm = 5.182997297997671e6
     )]
 
+    case = test_cases[1]
+
     for case in test_cases
         cr3bp = CR3BP(case.system...; μ=case.μ)
         cr3bp_handcoded = HandcodedCR3BP(case.system...; μ=case.μ)

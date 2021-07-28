@@ -23,7 +23,7 @@ function NBPSystemProperties(center::Symbol, bodies::Vararg{Symbol})
     NBPSystemProperties(center, center_id, bodies, body_ids, μ)
 end
 
-Base.show(io::IO, x::NBPSystemProperties) = print(io, "($(x.center), acc=$(x.bodies))")
+Base.show(io::IO, ::MIME"text/plain", x::NBPSystemProperties) = print(io, "($(x.center), acc=$(x.bodies))")
 
 #-----------------------------------#
 # EPHEMERIS-NBP EQUATIONS OF MOTION #
@@ -87,7 +87,6 @@ function EphemerisNBP(bodies::Vararg{Symbol}; center=nothing, kwargs...)
     EphemerisNBP(NBP_ODESystem(props; kwargs...), props)
 end
 
-Base.show(io::IO, x::EphemerisNBP) = print(io, "$(nameof(typeof(x)))$(x.props)")
 ModelingToolkit.parameters(model::EphemerisNBP) = SVector{0,Float64}()
 
 # HELPERS

@@ -7,8 +7,6 @@ export R3BPSystemProperties
 
 default_reference_frame(::Abstract_R3BPModel) = SynodicFrame()
 
-Base.show(io::IO, x::Abstract_R3BPModel) = print(io, "$(nameof(typeof(x)))$(x.props)")
-
 #-------------------#
 # SYSTEM PROPERTIES # 
 #-------------------#
@@ -83,7 +81,7 @@ const _3BPSystemPropertyData = Dict(
     )
 )
 
-Base.show(io::IO, x::R3BPSystemProperties) = print(io, (x.b1, x.b2))
+Base.show(io::IO, ::MIME"text/plain", x::R3BPSystemProperties) = print(io, (x.b1, x.b2))
 ModelingToolkit.parameters(model::Abstract_R3BPModel) = [getfield(model.props, i.name) for i in ModelingToolkit.parameters(model.ode.ode_system)]
 
 #---------#
