@@ -29,7 +29,7 @@ function solve_sensitivity(::Val{:ForwardDiff}, state::State, desired_frame=stat
     for _ in 1:order
         duals = DiffEqSensitivity.seed_duals(duals, tag)
     end
-    u0 = MVector{length(state.u0)}(duals[1:length(state.u0)])
+    u0 = duals[1:length(state.u0)]
 
     # Remake the state with the seeded values
     tspan = trace_time ? (state.tspan[begin], duals[end]) : state.tspan

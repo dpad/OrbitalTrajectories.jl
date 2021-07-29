@@ -11,9 +11,9 @@ struct State{M<:Abstract_AstrodynamicalModel,F<:Abstract_ReferenceFrame,uType,tT
     frame :: F  # Reference frame that the problem's u0 is defined in
     prob :: O
 end
+# State(model::Abstract_AstrodynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::AbstractArray, tspan) =
+#     State(model, reference_frame, MArray{Tuple{size(u0)...}}(u0), tspan)
 State(model::Abstract_AstrodynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::AbstractArray, tspan) =
-    State(model, reference_frame, MArray{Tuple{size(u0)...}}(u0), tspan)
-State(model::Abstract_AstrodynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::StaticArray, tspan) =
     State(model, reference_frame, ODEProblem(model, u0, tspan, parameters(model)))
 State(model::Abstract_AstrodynamicalModel, u0::AbstractArray, tspan) = State(model, default_reference_frame(model), u0, tspan)
 
