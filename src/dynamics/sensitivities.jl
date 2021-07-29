@@ -108,7 +108,7 @@ function extract_sensitivity_tensors(u0::AbstractArray, codomain_length, order)
     tensors = SArray[]
     for N in 1:order
         tensor_dim = ntuple(_->codomain_length, N+1)
-        tensor = reshape(u0[idxs[N]:(idxs[N+1]-1)], tensor_dim...)
+        tensor = reshape(u0[(idxs[N]+1):idxs[N+1]], tensor_dim...)
         push!(tensors, SArray{Tuple{tensor_dim...}}(tensor))
     end
     return tuple(tensors...)
