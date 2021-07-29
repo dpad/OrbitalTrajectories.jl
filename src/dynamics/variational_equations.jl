@@ -88,10 +88,6 @@ end
         error("Variational equations not currently implemented beyond order-$(MAX_VE_ORDER) derivatives (got $(order)).")
     end
 
-    # XXX: Wrap the code with common sub-expression elimination
-    # (but only do it for order 1, otherwise it takes too long?)
-    wrap_code = order == 1 ? (cse, cse) : (nothing, nothing)
-
     # Get properties of the system
     iv  = independent_variable(system)
     dvs = states(system)
@@ -103,6 +99,8 @@ end
     jacs = Array{Num}[reshape(sys.jacobian, ntuple(_->dim, N+1)) for (N, sys) in enumerate(vareqs)]
     ϕ = Array{Num}[reshape(states(sys), ntuple(_->dim, N+1)) for (N, sys) in enumerate(systems[2:end])]
 
+    @info "Building VarEqModel of order $(order) for state dimension $(dim)"
+
     # Create the STT array for this order
     dims = ntuple(_->1:dim, order+1)
     ϕ_name = Symbol("ϕ_$(order)")
@@ -110,7 +108,7 @@ end
     push!(ϕ, new_ϕ)
 
     # Get the Jacobian matrix (A(t)) of the previous system, relative to the original state.
-    push!(jacs, Array(reshape(compute_jacobian(systems[end], dvs; simplify=false), dims...)))
+    push!(jacs, Array(reshape(compute_jacobian(systems[end], dvs; simplify=true), dims...)))
 
     # Contract the tensors as needed
     # NOTE: Depends on the Jacobian, corresponding to A(t) matrix (for the

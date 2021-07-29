@@ -25,7 +25,11 @@ using SymbolicUtils.Code: Let, Func, MakeArray, SetArray, (←), LiteralExpr, At
 using Symbolics: Equation
 
 # Code below copied from Shashi Gowda's work in https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/200
+# and edited slightly to replace Let() with recursiveLet() defined below.
 # Under the MIT License as per conditions below:
+
+# Start of copyrighted code #
+#vvvvvvvvvvvvvvvvvvvvvvvvvvv#
 
 # Copyright (c) 2020: Shashi Gowda, Yingbo Ma, Mason Protter, Julia Computing.
 
@@ -70,7 +74,7 @@ function cse(expr)
     !istree(expr) && return expr
     dict=OrderedDict()
     final = _cse(expr, dict)
-    Let([var ← ex for (ex, var) in pairs(dict)], final)
+    recursiveLet([var ← ex for (ex, var) in pairs(dict)], final)
 end
 
 function _cse(exprs::AbstractArray)
@@ -81,16 +85,29 @@ end
 
 function cse(x::MakeArray)
     assigns, expr = _cse(x.elems)
-    Let(assigns, MakeArray(expr, x.similarto, x.output_eltype))
+    recursiveLet(assigns, MakeArray(expr, x.similarto, x.output_eltype))
 end
 
 function cse(x::SetArray)
     assigns, expr = _cse(x.elems)
-    Let(assigns, SetArray(x.inbounds, x.arr, expr))
+    recursiveLet(assigns, SetArray(x.inbounds, x.arr, expr))
 end
-# --------------------------------#
-# End of copyrighted code         #
-# --------------------------------#
+
+# End of copyrighted code #
+#^^^^^^^^^^^^^^^^^^^^^^^^^#
+
+function recursiveLet(assigns, body)
+    # XXX: this recursiveLet exists because assigns can be too big for a single
+    # Let block to handle, leading Julia to a StackOverflow when trying to
+    # evaluate code with such big let statements. Here, we split bigger Let
+    # statements into Lets of Lets (i.e. a recursive definition of Let).
+    MAX_ASSIGNS = 50
+    if length(assigns) > MAX_ASSIGNS
+        Let(assigns[1:MAX_ASSIGNS], recursiveLet(assigns[MAX_ASSIGNS+1:end], body))
+    else
+        Let(assigns, body)
+    end
+end
 
 function _cse(eq::Num, dict)
     final = _cse(Symbolics.value(eq), dict)
