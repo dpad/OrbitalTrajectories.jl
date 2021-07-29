@@ -34,7 +34,7 @@ module Dynamics
 
     # Dynamical models
     abstract type Abstract_AstrodynamicalODESystem <: ModelingToolkit.AbstractODESystem end
-    abstract type Abstract_VariationalEquationsODESystem{Order} <: ModelingToolkit.AbstractODESystem end
+    abstract type Abstract_VariationalEquationsODESystem{Order} <: Abstract_AstrodynamicalODESystem end
     abstract type Abstract_AstrodynamicalModel end
     abstract type Abstract_ModelProperties end
 

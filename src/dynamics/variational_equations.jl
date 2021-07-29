@@ -6,14 +6,14 @@ export with_var_eqs
 
 const MAX_VE_ORDER = 2
 
-struct VarEqModel_ODESystem{Order, F} <: Abstract_AstrodynamicalODESystem
+struct VarEqModel_ODESystem{Order, F} <: Abstract_VariationalEquationsODESystem{Order}
     ode_system  :: ODESystem   # The full combined ODE system
     ode_f       :: F           # The full ODE system function
     VE_system   :: ODESystem   # Only the differential variational equations for this order
     jacobian    :: Array{Num}  # Stores the symbolic jacobian expressions
 end
 
-struct VarEqModel{Order, O<:VarEqModel_ODESystem{Order}, M<:Abstract_AstrodynamicalModel} <: Abstract_AstrodynamicalModel
+struct VarEqModel{Order, O<:Abstract_VariationalEquationsODESystem{Order}, M<:Abstract_AstrodynamicalModel} <: Abstract_AstrodynamicalModel
     ode         :: O  # The new ODE system
     model       :: M  # The original model
 end
@@ -41,7 +41,7 @@ function State(model::VarEqModel{Order}, state::State) where {Order}
     uType = eltype(u0)
 
     # Get the model dimensions
-    dim = length(states(model.model.ode))
+    dim = state_length(model.model)
 
     if length(u0) == dim && Order > 0
         # User only provided initial state vector.
