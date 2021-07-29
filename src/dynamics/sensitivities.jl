@@ -11,6 +11,7 @@ recursive_value(val) = val
 recursive_value(val::ForwardDiff.Dual) = recursive_value(ForwardDiff.value(val))
 get_order(valtype::Type{<:ForwardDiff.Dual}) = 1 + get_order(valtype.parameters[2])
 get_order(::Type{<:Number}) = 0
+get_order(state::State) = get_order(eltype(state.u0))
 
 const AD = ForwardDiff
 const FD = FiniteDiff
@@ -86,7 +87,7 @@ const STM = StateTransitionMatrix
 
 # Constructors
 @doc """ Extracts the State Transition Tensor from the state (solved with solve_sensitivity). """
-function StateTransitionTensor(state::State, tspan=state.tspan; order=get_order(eltype(state.u0)))
+function StateTransitionTensor(state::State, tspan=state.tspan; order=get_order(state))
     tensors = extract_sensitivity_tensors(state.u0, state_length(state), order)
     return StateTransitionTensor(recursive_value.(tspan), tensors)
 end
@@ -94,15 +95,23 @@ StateTransitionTensor(m::Module, args...; kwargs...) = StateTransitionTensor(Val
 StateTransitionTensor(v::Val, args...; kwargs...) = StateTransitionTensor(solve_sensitivity(v, args...; kwargs...))
 StateTransitionMatrix(args...; kwargs...) = StateTransitionTensor(args...; kwargs..., order=1)
 
+
+
 function extract_sensitivity_tensors(u0::AbstractArray, codomain_length, order)
-    order == 0 || order == 1 || error("Given state only contains Variational Equation sensitivities of up to order 1, but got $(order).")
-
     # Variational Equations
-    expected_length = codomain_length^2 + codomain_length
-    length(u0) == expected_length || error("Unknown sensitivity type, expected $(expected_length) variables but found $(length(u0)).")
+    dims = [codomain_length^N for N in 1:(order+1)]
+    expected_length = sum(dims)
+    length(u0) >= expected_length || error("Unknown sensitivity type, expected $(expected_length) variables but found $(length(u0)).")
 
-    tensor = SMatrix{codomain_length,codomain_length}(reshape(u0[codomain_length+1:end], codomain_length, codomain_length))
-    return (tensor,)
+    # Extract the sequential tensors from u0
+    idxs = cumsum(dims)
+    tensors = SArray[]
+    for N in 1:order
+        tensor_dim = ntuple(_->codomain_length, N+1)
+        tensor = reshape(u0[idxs[N]:(idxs[N+1]-1)], tensor_dim...)
+        push!(tensors, SArray{Tuple{tensor_dim...}}(tensor))
+    end
+    return tuple(tensors...)
 end
 
 function extract_sensitivity_tensors(u0::AbstractArray{DualType}, codomain_dim, order) where {DualType<:ForwardDiff.Dual}

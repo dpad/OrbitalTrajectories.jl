@@ -28,6 +28,9 @@ end
 default_reference_frame(model::VarEqModel) = default_reference_frame(model.model)
 ModelingToolkit.parameters(model::VarEqModel) = parameters(model.model)
 state_length(m::VarEqModel) = state_length(m.model)
+get_order(::State{M}) where {Order,M<:VarEqModel{Order}} = Order
+primary_body(model::VarEqModel) = primary_body(model.model)
+secondary_body(model::VarEqModel) = secondary_body(model.model)
 
 Base.show(io::IO, ::MIME"text/plain", x::Abstract_VariationalEquationsODESystem{Order}) where {Order} = print(io, string(" with ", SciMLBase.TYPE_COLOR, "Order=$(Order) var.eqs.", SciMLBase.NO_COLOR))
 function Base.show(io::IO, M::MIME"text/plain", x::VarEqModel{Order}) where {Order}
