@@ -52,11 +52,10 @@ Base.show(io::IO, ::MIME"text/plain", ::Type{T}) where {T<:Abstract_Astrodynamic
 function Base.show(io::IO, M::MIME"text/plain", x::Abstract_AstrodynamicalModel)
     print(io, string(SciMLBase.TYPE_COLOR, nameof(typeof(x)), SciMLBase.NO_COLOR))
     show(io, M, x.props)
-    show(io, M, x.ode)
 end
 
 Base.show(io::IO, ::MIME"text/plain", ::Type{T}) where {T<:Abstract_AstrodynamicalODESystem} = print(io, nameof(T))
-Base.show(io::IO, ::MIME"text/plain", x::Abstract_AstrodynamicalODESystem) = nothing
+Base.show(io::IO, M::MIME"text/plain", x::Abstract_AstrodynamicalODESystem) = show(io, M, typeof(x))
 
 ModelingToolkit.varmap_to_vars(model::Abstract_AstrodynamicalModel, varmap) = ModelingToolkit.varmap_to_vars(varmap, parameters(model))
 DiffEqBase.isinplace(f::Abstract_AstrodynamicalModel) = true
