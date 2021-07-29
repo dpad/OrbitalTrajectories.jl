@@ -111,7 +111,7 @@ end
     push!(ϕ, new_ϕ)
 
     # Get the Jacobian matrix (A(t)) of the previous system, relative to the original state.
-    push!(jacs, Array(reshape(compute_jacobian(systems[end], dvs; simplify=true), dims...)))
+    push!(jacs, Array(reshape(compute_jacobian(length(vareqs) > 0 ? vareqs[end] : system, dvs; simplify=true), dims...)))
 
     # Contract the tensors as needed
     # NOTE: Depends on the Jacobian, corresponding to A(t) matrix (for the
@@ -157,10 +157,16 @@ function STT_diff_contraction(::Val{2}, jacs, ϕ)
     # Order-2 STT
     jac_1, jac_2 = jacs
     ϕ_1, ϕ_2 = ϕ
-    @tullio RESULT[i,a,b] := jac_1[i,α] * ϕ_2[α,a,b] + jac_2[i,α,β] * ϕ_1[α,a] * ϕ_1[β,b]
+    @tullio RESULT[i,a,b] := jac_1[i,α] * ϕ_2[α,a,b]
+    @tullio RESULT[i,a,b] += jac_2[i,α,β] * ϕ_1[α,a] * ϕ_1[β,b]
 end
 
-function compute_jacobian(system::ModelingToolkit.AbstractODESystem, dvs; kwargs...)
+function compute_jacobian(system::ODESystem, dvs; kwargs...)
     rhs = [eq.rhs for eq ∈ equations(system)]
+    return Symbolics.jacobian(rhs, dvs; kwargs...)
+end
+
+function compute_jacobian(system::VarEqModel_ODESystem, dvs; kwargs...)
+    rhs = vec(system.jacobian)
     return Symbolics.jacobian(rhs, dvs; kwargs...)
 end
