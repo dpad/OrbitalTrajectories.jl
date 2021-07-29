@@ -15,7 +15,8 @@ end
 #     State(model, reference_frame, MArray{Tuple{size(u0)...}}(u0), tspan)
 State(model::Abstract_AstrodynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::AbstractArray, tspan) =
     State(model, reference_frame, ODEProblem(model, u0, tspan, parameters(model)))
-State(model::Abstract_AstrodynamicalModel, u0::AbstractArray, tspan) = State(model, default_reference_frame(model), u0, tspan)
+State(model::Abstract_AstrodynamicalModel, u0::AbstractArray, tspan) =
+    State(model, default_reference_frame(model), u0, tspan)
 
 struct Trajectory{M<:Abstract_AstrodynamicalModel,F<:Abstract_ReferenceFrame,T,N,A,O<:DiffEqBase.AbstractTimeseriesSolution{T,N,A},} <: DiffEqBase.AbstractTimeseriesSolution{T,N,A}
     model :: M
@@ -87,14 +88,14 @@ function Base.show(io::IO, M::MIME"text/plain", state::State)
     end
 end
 Base.show(io::IO, ::MIME"text/plain", ::Type{T}) where {M,R,T<:Trajectory{M,R}} = print(io, "Trajectory{$(nameof(M)),$(nameof(R))}")
-function Base.show(io::IO, ::MIME"text/plain", A::Trajectory)
+function Base.show(io::IO, M::MIME"text/plain", A::Trajectory)
     if get(io, :compact, false)
         print(io, "Trajectory{$(nameof(typeof(A.model)))}(t=$((A.t[begin], A.t[end])))")
     else
-        println(io, string(
-            SciMLBase.TYPE_COLOR, nameof(typeof(A)), SciMLBase.NO_COLOR, " in ",
-            SciMLBase.TYPE_COLOR, A.model, SciMLBase.NO_COLOR, " in ",
-            SciMLBase.TYPE_COLOR, A.frame, SciMLBase.NO_COLOR))
+        print(io, string(
+            SciMLBase.TYPE_COLOR, nameof(typeof(A)), SciMLBase.NO_COLOR, " in "))
+        show(io, M, A.model)
+        println(io, string(" in ", SciMLBase.TYPE_COLOR, A.frame, SciMLBase.NO_COLOR))
         println(io, string(
             "    retcode  = $(A.retcode) [$(length(A.t)) timesteps]\n",
             "    t        = ($(A.t[begin]), $(A.t[end]))\n",

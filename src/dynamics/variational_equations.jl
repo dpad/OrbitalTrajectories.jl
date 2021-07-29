@@ -29,16 +29,18 @@ default_reference_frame(model::VarEqModel) = default_reference_frame(model.model
 ModelingToolkit.parameters(model::VarEqModel) = parameters(model.model)
 state_length(m::VarEqModel) = state_length(m.model)
 
-Base.show(io::IO, ::MIME"text/plain", x::Abstract_VariationalEquationsODESystem{Order}) where {Order} = print(io, string(" with ", SciMLBase.TYPE_COLOR, "order-$(Order) var.eqs.", SciMLBase.NO_COLOR))
+Base.show(io::IO, ::MIME"text/plain", x::Abstract_VariationalEquationsODESystem{Order}) where {Order} = print(io, string(" with ", SciMLBase.TYPE_COLOR, "Order=$(Order) var.eqs.", SciMLBase.NO_COLOR))
+function Base.show(io::IO, M::MIME"text/plain", x::VarEqModel{Order}) where {Order}
+    print(io, string(SciMLBase.TYPE_COLOR, "VarEqModel", SciMLBase.NO_COLOR, "{"))
+    show(io, M, x.model) 
+    show(io, M, x.ode)
+    print(io, SciMLBase.NO_COLOR, "}")
+end
 
 @doc """Generic State with default initial values for VarEq systems."""
-function State(model::VarEqModel{Order}, state::State) where {Order}
-    prob = state.prob
-    reference_frame = state.frame
-
+function State(model::VarEqModel{Order}, reference_frame::Abstract_ReferenceFrame, u0::AbstractArray, tspan) where {Order}
     # Get the problem u0
-    u0 = convert(Array, prob.u0)
-    uType = eltype(u0)
+    u0 = deepcopy(convert(Array, u0))
 
     # Get the model dimensions
     dim = state_length(model.model)
@@ -48,6 +50,7 @@ function State(model::VarEqModel{Order}, state::State) where {Order}
         # We need to enlarge it to include the variational equation states!
 
         # 1st-order sensitivities start as the Identity matrix
+        uType = eltype(u0)
         append!(u0, vec(Matrix{eltype(uType)}(I, dim, dim)))
 
         # 2nd-order and above are just zeros
@@ -55,7 +58,13 @@ function State(model::VarEqModel{Order}, state::State) where {Order}
             append!(u0, zeros(eltype(uType), dim^(order+1)))
         end
     end
-    State(model, reference_frame, ODEProblem(model, u0, prob.tspan, parameters(model.model)))
+
+    # The final state size should match
+    expected_dim = sum([dim^N for N in 1:(Order+1)])
+    length(u0) == expected_dim || error("Expected u0 vector of length $(expected_dim), got $(length(u0)).")
+
+    # Build the state
+    State(model, reference_frame, ODEProblem(model, u0, tspan, parameters(model.model)))
 end
 
 function with_var_eqs(model::M, order=1; force=false, kwargs...) where {M<:Abstract_AstrodynamicalModel}
@@ -79,13 +88,17 @@ end
         error("Variational equations not currently implemented beyond order-$(MAX_VE_ORDER) derivatives (got $(order)).")
     end
 
+    # XXX: Wrap the code with common sub-expression elimination
+    # (but only do it for order 1, otherwise it takes too long?)
+    wrap_code = order == 1 ? (cse, cse) : (nothing, nothing)
+
     # Get properties of the system
     iv  = independent_variable(system)
     dvs = states(system)
     dim = length(dvs)
 
     # Build all models for lower orders (should be memoized so should not be expensive)
-    vareqs = [VarEqModel(system, N) for N in  1:order-1]
+    vareqs = [VarEqModel_ODESystem(system, N) for N in  1:order-1]
     systems = [system, [sys.VE_system for sys in vareqs]...]
     jacs = Array{Num}[reshape(sys.jacobian, ntuple(_->dim, N+1)) for (N, sys) in enumerate(vareqs)]
     ϕ = Array{Num}[reshape(states(sys), ntuple(_->dim, N+1)) for (N, sys) in enumerate(systems[2:end])]
