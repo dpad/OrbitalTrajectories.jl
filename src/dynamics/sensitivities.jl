@@ -131,7 +131,7 @@ function extract_sensitivity_tensors(u0::AbstractArray{DualType}, codomain_dim, 
 
         # Extract the Partial values directly from the multi-level partials.
         tensor = SArray{Tuple{codomain_dim,domain...}}(
-            ForwardDiff.value.(
+            recursive_value.(
                 ForwardDiff.partials.(
                     u0,
                     # To extract the N-th order partials as an N-dimensional
