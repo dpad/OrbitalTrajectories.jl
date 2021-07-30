@@ -28,6 +28,7 @@ function R4BPSystemProperties(a::Symbol, b::Symbol, c::Symbol, α0::Number=0.; k
     # Run-time compute remaining values
     GM = @. SpiceUtils.get_GM((a, b, c))u"km^3/s^2"
     m3 = GM[3] / (GM[1] + GM[2])
+    map(SpiceUtils.load_ephemerides, (a, b, c))
     state_3 = Array(SpiceUtils.get_state(0., a, c))
     elements_3 = oscltx(state_3, 0., ustrip(u"km^3/s^2", GM[3]))
     a3 = get(kwargs, :a3, elements_3[10]u"km" / r3bp.L)
