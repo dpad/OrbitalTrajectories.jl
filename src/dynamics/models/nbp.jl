@@ -119,6 +119,17 @@ function convert_to_frame(state::State{<:EphemerisNBP,<:Abstract_ReferenceFrame}
     state = State(state.model, frame, prob1)
     return state
 end
+function convert_to_frame(state::State{<:VarEqModel{Order,<:Any,<:EphemerisNBP},<:Abstract_ReferenceFrame}, frame::Abstract_ReferenceFrame) where {Order}
+    if Order != 1
+        error("convert_to_frame() for a VarEqModel{EphemerisNBP} currently only supports up to Order 1!")
+    end
+    # Create a temporary state with the Ephemeris model
+    ephemeris_state = State(state.model.model, state.frame, state.u0, state.tspan)
+    # Convert the ephemeris state to the desired frame
+    converted_state = convert_to_frame(ephemeris_state, frame)
+    # Convert back to the VarEqs model state
+    State(state.model, converted_state.frame, converted_state.u0, converted_state.tspan)
+end
 
 function state_to_frame(state::State{<:EphemerisNBP,InertialFrame}, frame::SynodicFrame{true}, to_synodic, inv_synodic)
     u1 = state_to_frame(state, SynodicFrame(false), to_synodic, inv_synodic)
