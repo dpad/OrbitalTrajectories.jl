@@ -61,20 +61,13 @@ using ForwardDiff
         @test λ_max_VE_handcoded ≈ case.λ_max rtol=1e-4
 
         # Try to get 2nd-order STT and norm of its 2nd-order Tensor
-        STT_AD = STT(AD, state_cr3bp; order=2)
-        STT_AD_2_norm = norm(STT_AD[end].tensors[2])
+        STT_AD_2 = STT(AD, state_cr3bp; order=2)
+        STT_AD_2_norm = norm(STT_AD_2[end].tensors[2])
         @test STT_AD_2_norm ≈ case.STT2_norm rtol=1e-2
 
         # Try to get 2nd-order STT from variational equations model
-        # XXX: This seemingly works, but causes instabilities, so the solution
-        # stops short.
-        sol_AD = solve_sensitivity(AD, state_cr3bp; order=2)
-        sol_VE_2 = solve_sensitivity(VE, state_cr3bp; order=2)
-
-        STT(sol_AD(0.5)).tensors[1]
-        STT(sol_VE_2(0.5)).tensors[1]
-        STT(sol_AD(0.5)).tensors[2][:,:,5:6]
-        STT(sol_VE_2(0.5)).tensors[2][:,:,5:6]
+        STT_VE_2 = STT(VE, state_cr3bp; order=2)
+        @test STT_VE_2[end] ≈ STT_AD_2[end] rtol=1e-5
     end
 end
 
