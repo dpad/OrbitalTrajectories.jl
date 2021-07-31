@@ -2,9 +2,11 @@
 
 | **Documentation**   |  **Tests**     |  Citation| License
 |:--------:|:----------------------:|:-----:|:-----:|
-|[![](https://img.shields.io/badge/docs-online-blue.svg)](https://dpad.github.io/OrbitalTrajectories.jl/stable/)| [![CI](https://github.com/dpad/OrbitalTrajectories.jl/workflows/CI/badge.svg)](https://github.com/dpad/OrbitalTrajectories.jl/actions) [![codecov](https://codecov.io/gh/dpad/OrbitalTrajectories.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/dpad/OrbitalTrajectories.jl) | [![reference](https://img.shields.io/badge/Paper-Padilha%20et%20al%202021-brightgreen)](https://dpadilha.com/Padilha%20-%20AAS%2021-303.pdf) [![video](https://img.shields.io/badge/Presentation-AAS%2FAIAA%20Conference-brightgreen)](https://www.youtube.com/watch?v=FMVOUvWNlLE) | [![GitHub license](https://img.shields.io/github/license/dpad/OrbitalTrajectories.jl)](LICENSE)
+|[![](https://img.shields.io/badge/docs-online-blue.svg)](https://dpad.github.io/OrbitalTrajectories.jl/stable/)| [![CI](https://github.com/dpad/OrbitalTrajectories.jl/workflows/CI/badge.svg)](https://github.com/dpad/OrbitalTrajectories.jl/actions) [![codecov](https://codecov.io/gh/dpad/OrbitalTrajectories.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/dpad/OrbitalTrajectories.jl) | [![reference](https://img.shields.io/badge/Paper-Padilha%20et%20al%202021-brightgreen)](https://dpadilha.com/Padilha%20-%20AAS%2021-303.pdf) | [![GitHub license](https://img.shields.io/github/license/dpad/OrbitalTrajectories.jl)](LICENSE)
 
 *OrbitalTrajectories.jl is a modern orbital trajectory design, optimisation, and analysis library for Julia, providing methods and tools for designing spacecraft orbits and transfers via high-performance simulations of astrodynamical models.*
+
+[![video](https://img.shields.io/badge/Presentation-AAS%2FAIAA%20Conference-brightgreen)](https://www.youtube.com/watch?v=FMVOUvWNlLE) [![video](https://img.shields.io/badge/Presentation-JuliaCon%202021-brightgreen)](https://www.youtube.com/watch?v=iJr_lU7_7Go)
 
 ---
 
