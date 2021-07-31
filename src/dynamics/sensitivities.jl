@@ -19,7 +19,7 @@ const VE = Val(:VariationalEquations)
 
 @doc """ Return the fully propagated trajectory including state sensitivities with respect to the initial state. """
 solve_sensitivity(m::Module, args...; kwargs...) = solve_sensitivity(Val(first(fullname(m))), args...; kwargs...)
-function solve_sensitivity(::Val{:ForwardDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; order=1, trace_time=false, kwargs...)
+function solve_sensitivity(::Val{:ForwardDiff}, state::State, desired_frame=state.frame, args...; order=1, trace_time=false, kwargs...)
     trace_time && !isnothing(get(kwargs, :callback, nothing)) && @warn("trace_time sensitivity does not seem to play well with callbacks!")
 
     values = trace_time ? [state.u0..., state.tspan[end]] : state.u0
@@ -37,10 +37,10 @@ function solve_sensitivity(::Val{:ForwardDiff}, state::State, desired_frame=stat
     state_AD = remake(state; u0, tspan)
 
     # Solve and convert to the desired frame
-    sol = solve(state_AD, alg; kwargs...)
+    sol = solve(state_AD, args...; kwargs...)
     return convert_to_frame(sol, desired_frame)
 end
-function solve_sensitivity(::Val{:VariationalEquations}, state::State, args...; order=1, kwargs...)
+function solve_sensitivity(::Val{:VariationalEquations}, state::State, desired_frame=state.frame, args...; order=1, kwargs...)
     # Build the VarEq model
     vareq_model = with_var_eqs(state.model, order)
 
@@ -48,7 +48,8 @@ function solve_sensitivity(::Val{:VariationalEquations}, state::State, args...; 
     new_state = State(vareq_model, state.frame, state.u0, state.tspan)
 
     # Solve with variational equations
-    return solve(new_state, args...; kwargs...)
+    sol = solve(new_state, args...; kwargs...)
+    return convert_to_frame(sol, desired_frame)
 end
 solve_sensitivity(::Val{:FiniteDiff}, args...; kwargs...) = error("solve_sensitivity(state) is not defined for FiniteDiff. Call STM(FD, state) instead.")
 
@@ -216,7 +217,11 @@ for ORDER in 1:MAX_STT_ORDER
             push!(inverse_tensors, INV_TENSOR)
         end)
     elseif ORDER == 3
+        # TODO: I'm not sure this implementation is correct. Refer to the equations in Park 2007.
+        # I think it might need to be like the STT_diff_contraction functions, in that the "+" terms
+        # of this need to be split up across multiple @tullios (in other words, the summation is done separately for each term).
         push!(inv_exprs, quote
+            @warn "inv(STT{3}) is untested and may be invalid!"
             @tullio INV_TENSOR[i,a,b,c] := begin
                 -(inverse_tensors[1][i,alpha] * tensors[2][alpha,j1,j2,j3] + inverse_tensors[2][i,alpha,beta] * (tensors[1][alpha,j1] * tensors[2][beta,j2,j3] + tensors[2][alpha,j1,j2] * tensors[1][beta,j3] + tensors[2][alpha,j1,j3] * tensors[1][beta,j2])) * (inverse_tensors[1][j1,a] * inverse_tensors[1][j2,b] * inverse_tensors[1][j3,c])
             end
@@ -323,11 +328,11 @@ function StateTransitionTensor(sol::Trajectory, t1, t2; kwargs...)
 end
 
 # Compute STMs by solving the given state first
-function StateTransitionTensor(::Val{:FiniteDiff}, state::State, desired_frame=state.frame, alg=DEFAULT_ALG; order=1, kwargs...)
+function StateTransitionTensor(::Val{:FiniteDiff}, state::State, desired_frame=state.frame, args...; order=1, kwargs...)
     order == 1 || error("FiniteDiff STT only supports order 1 (STM), got $(order).")
     tensor = FiniteDiff.finite_difference_jacobian(state.u0) do u0
         new_state = remake(state, u0=u0)
-        trajectory = solve(new_state, alg; kwargs...)
+        trajectory = solve(new_state, args...; kwargs...)
         trajectory_converted = convert_to_frame(trajectory, desired_frame)
         end_state_u = trajectory_converted.sol[end]
     end
