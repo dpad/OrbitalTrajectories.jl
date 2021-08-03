@@ -21,11 +21,15 @@ LinearAlgebra.norm(a::AbstractArray{<:ModelingToolkit.Num}) = sum(a .^ 2)^(1/2)
 # --------------------------------#
 # Common Subexpression Evaluation #
 # --------------------------------#
-using SymbolicUtils.Code: Let, Func, MakeArray, SetArray, (←), LiteralExpr, AtIndex
+using SymbolicUtils.Code: Let, Func, MakeArray, SetArray, (←), LiteralExpr, AtIndex, get_symbolify, lhs, union_symbolify!
 using Symbolics: Equation
 
 # Code below copied from Shashi Gowda's work in https://github.com/JuliaSymbolics/SymbolicUtils.jl/pull/200
+# and edited slightly to replace Let() with literalAssign() defined below.
 # Under the MIT License as per conditions below:
+
+# Start of copyrighted code #
+#vvvvvvvvvvvvvvvvvvvvvvvvvvv#
 
 # Copyright (c) 2020: Shashi Gowda, Yingbo Ma, Mason Protter, Julia Computing.
 
@@ -70,7 +74,7 @@ function cse(expr)
     !istree(expr) && return expr
     dict=OrderedDict()
     final = _cse(expr, dict)
-    Let([var ← ex for (ex, var) in pairs(dict)], final)
+    AssignsThenBody([var ← ex for (ex, var) in pairs(dict)], final)
 end
 
 function _cse(exprs::AbstractArray)
@@ -81,16 +85,38 @@ end
 
 function cse(x::MakeArray)
     assigns, expr = _cse(x.elems)
-    Let(assigns, MakeArray(expr, x.similarto, x.output_eltype))
+    AssignsThenBody(assigns, MakeArray(expr, x.similarto, x.output_eltype))
 end
 
 function cse(x::SetArray)
     assigns, expr = _cse(x.elems)
-    Let(assigns, SetArray(x.inbounds, x.arr, expr))
+    AssignsThenBody(assigns, SetArray(x.inbounds, x.arr, expr))
 end
-# --------------------------------#
-# End of copyrighted code         #
-# --------------------------------#
+
+# End of copyrighted code #
+#^^^^^^^^^^^^^^^^^^^^^^^^^#
+
+struct AssignsThenBody
+    # XXX: this litearlAssign exists because assigns can be too big for a single
+    # Let block to handle, leading Julia to a StackOverflow when trying to
+    # evaluate code with such big let statements. Here, we simply create a
+    # block and assign all the variables manually, followed by outputting the
+    # body. So it's not a Let block at all, but necessary for now until better
+    # SymbolicUtils support comes around.
+    assigns
+    body
+end
+
+function Symbolics.Code.toexpr(l::AssignsThenBody, st)
+    dargs = l.assigns
+
+    funkyargs = get_symbolify(map(lhs, dargs))
+    union_symbolify!(st.symbolify, funkyargs)
+
+    expr = Expr(:block, map(p->toexpr(p, st), dargs)...)
+    push!(expr.args, toexpr(l.body, st))
+    return expr
+end
 
 function _cse(eq::Num, dict)
     final = _cse(Symbolics.value(eq), dict)

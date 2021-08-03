@@ -4,12 +4,10 @@
 
 default_reference_frame(::Abstract_R4BPModel) = SynodicFrame()
 
-Base.show(io::IO, x::Abstract_R4BPModel) = print(io, "$(nameof(typeof(x)))$(x.props)")
-
 #-------------------#
 # SYSTEM PROPERTIES # 
 #-------------------#
-struct R4BPSystemProperties{N<:Number}
+struct R4BPSystemProperties{N<:Number} <: Abstract_ModelProperties
     b1 :: Symbol  # Identifier of body 1 (central body)
     b2 :: Symbol  # Identifier of body 2 (smaller body)
     b3 :: Symbol  # Identifier of body 3 (large distance body)
@@ -30,6 +28,7 @@ function R4BPSystemProperties(a::Symbol, b::Symbol, c::Symbol, α0::Number=0.; k
     # Run-time compute remaining values
     GM = @. SpiceUtils.get_GM((a, b, c))u"km^3/s^2"
     m3 = GM[3] / (GM[1] + GM[2])
+    map(SpiceUtils.load_ephemerides, (a, b, c))
     state_3 = Array(SpiceUtils.get_state(0., a, c))
     elements_3 = oscltx(state_3, 0., ustrip(u"km^3/s^2", GM[3]))
     a3 = get(kwargs, :a3, elements_3[10]u"km" / r3bp.L)
@@ -40,7 +39,7 @@ function R4BPSystemProperties(a::Symbol, b::Symbol, c::Symbol, α0::Number=0.; k
     R4BPSystemProperties(a, b, c, m3, a3, ω3, μ, μ2, α0)
 end
 
-Base.show(io::IO, x::R4BPSystemProperties) = print(io, parameters(x))#(a=x.b1, b=x.b2, c=x.b3, α0=x.α0))
+Base.show(io::IO, ::MIME"text/plain", x::R4BPSystemProperties) = print(io, parameters(x))#(a=x.b1, b=x.b2, c=x.b3, α0=x.α0))
 ModelingToolkit.parameters(props::R4BPSystemProperties) = NamedTuple([i => getfield(props, i) for i in propertynames(props)])
 ModelingToolkit.parameters(model::Abstract_R4BPModel) = [getfield(model.props, i.name) for i in ModelingToolkit.parameters(model.ode.ode_system)]
 

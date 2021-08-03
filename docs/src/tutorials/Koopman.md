@@ -19,7 +19,7 @@ using Distributions          # To define uncertainty distributions
 nothing # hide
 ```
 
-## Differential Correction
+## Orbital Fly-By of Europa
 
 We begin with a Europa fly-by test case[^Pellegrini2016] in the CR3BP (Jupiter-Europa) system:
 

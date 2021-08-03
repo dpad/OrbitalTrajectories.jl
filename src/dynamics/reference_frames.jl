@@ -9,15 +9,15 @@ struct SynodicFrame{IsNormalised} <: Abstract_ReferenceFrame
     SynodicFrame(isnormalised::Bool=true) = new{isnormalised}()
 end
 
-default_reference_frame(model::Abstract_DynamicalModel) = error("$(model) has no default reference frame assigned!")
-default_synodic_reference_frame(::Abstract_DynamicalModel) = SynodicFrame()
+default_reference_frame(model::Abstract_AstrodynamicalModel) = error("$(model) has no default reference frame assigned!")
+default_synodic_reference_frame(::Abstract_AstrodynamicalModel) = SynodicFrame()
 
 #----------------------------------#
 # CONVERT BETWEEN REFERENCE FRAMES #
 #----------------------------------#
 convert_to_frame(state::State, frame::Abstract_ReferenceFrame) = error("Cannot convert $(nameof(typeof(state))){$(state.model),$(state.frame)} to $(frame).")
-convert_to_frame(state::State{<:Abstract_DynamicalModel,T}, ::T) where {T<:Abstract_ReferenceFrame} = state
-convert_to_frame(traj::Trajectory{<:Abstract_DynamicalModel,T}, ::T) where {T<:Abstract_ReferenceFrame} = traj
+convert_to_frame(state::State{<:Abstract_AstrodynamicalModel,T}, ::T) where {T<:Abstract_ReferenceFrame} = state
+convert_to_frame(traj::Trajectory{<:Abstract_AstrodynamicalModel,T}, ::T) where {T<:Abstract_ReferenceFrame} = traj
 function convert_to_frame(traj::Trajectory, frame::Abstract_ReferenceFrame)
     prob0 = traj.prob
     times = traj.t
@@ -48,12 +48,12 @@ function convert_u!(u, t, traj, frame)
 end
 
 const CRASHED_RETCODE = :Crashed
-function collision(system::Abstract_DynamicalModel, body, dist=bodvrd(String(body), "RADII")[1]; radii=1., interp_points=10)
+function collision(system::Abstract_AstrodynamicalModel, body, dist=bodvrd(String(body), "RADII")[1]; radii=1., interp_points=10)
     diam = radii * dist
     ContinuousCallback((integrator) -> terminate!(integrator, CRASHED_RETCODE); interp_points) do u, t, integrator
         check_distance(u, t, system, body, diam)
     end
 end
-check_distance(u, t, system::Abstract_DynamicalModel, body) = error("check_distance not defined for $(nameof(typeof(system)))")
+check_distance(u, t, system::Abstract_AstrodynamicalModel, body) = error("check_distance not defined for $(nameof(typeof(system)))")
 crashed(sol::Trajectory) = crashed(sol.sol)
 crashed(sol::ODESolution) = sol.retcode == CRASHED_RETCODE

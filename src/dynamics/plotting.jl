@@ -87,9 +87,17 @@ end
 
         # Plot the trajectory
         vars --> (1, 2)  # (x, y)
-        denseplot --> true
+        denseplot = get(plotattributes, :denseplot, true)
+        denseplot --> denseplot
 
-        xlim, ylim = get_margin_lims(sol, plotattributes)
+        sol_interpolated = sol
+        if denseplot
+            plotdensity = get(plotattributes, :plotdensity, 1000)
+            tspan = range(sol.t[begin], sol.t[end], length=plotdensity)
+            sol_interpolated = sol(tspan)
+        end
+
+        xlim, ylim = get_margin_lims(sol_interpolated, plotattributes)
         xlims --> xlim
         ylims --> ylim
         
@@ -106,27 +114,28 @@ end
     sol.sol
 end
 
-@recipe function f(sol::Union{DiffEqBase.ODESolution{T}, OrdinaryDiffEq.ODECompositeSolution{T}}) where {T <: ForwardDiff.Dual}
-    # TODO: Fix the type dispatch on this, since it's doing piracy.
+@recipe function f(STMs::AbstractArray{<:STM})
+end
 
+@recipe function f(sol::Trajectory{<:Abstract_AstrodynamicalModel,<:Abstract_ReferenceFrame,T}) where {T <: ForwardDiff.Dual}
     trace_vars = get(plotattributes, :trace, false)
     trace_stability = get(plotattributes, :trace_stability, false)
     denseplot = get(plotattributes, :denseplot, true)
     plotdensity = get(plotattributes, :plotdensity, 1000)
 
-    tspan = ForwardDiff.value.(denseplot ? range(sol.t[begin], sol.t[end], length=plotdensity) : sol.t)
+    tspan = recursive_value.(denseplot ? range(sol.t[begin], sol.t[end], length=plotdensity) : sol.t)
     tspan_norm = @. (tspan - tspan[begin]) / (tspan[end] - tspan[begin])
-    u_vals = sol.(tspan)
+    sol_interpolated = sol(tspan)
 
     if trace_vars
-        STMs = hcat([reshape(v, length(v)) for v in extract_STMs(u_vals)]...)'
-        @series begin
-            label --> ""
-            legend --> false
-            tspan_norm, STMs
-        end
+        STMs = STM(sol_interpolated)
+        label --> ""
+        legend --> false
+        # NOTE: Need to convert to Array so this doesn't create a static matrix, which causes unncessary compilation
+        vals = hcat([Array(vec(s.tensors[1])) for s in STMs]...)'
+        tspan, vals
     elseif trace_stability
-        stability_indices = norm.(extract_stability(u_vals))'
+        stability_indices = norm.(stability_index(sol_interpolated))'
         sorted_indices = hcat(map(sort, eachslice(stability_indices, dims=1))...)[4:6,:]'
         max_eigenvalues = map(maximum, eachslice(sorted_indices, dims=1))
         @series begin
@@ -135,16 +144,43 @@ end
             tspan_norm, max_eigenvalues
         end
     else
+        # TODO: Move this code out to a common Trajectory plotter.
+
+        # Plot the frame
+        if !get(plotattributes, :nomodel, false)
+            @series begin
+                seriesalpha := 1.0
+                (sol.model, sol.frame)
+            end
+            framestyle --> :zerolines
+        else
+            framestyle --> :none
+        end
+
+        # Plot the trajectory
+        xlim, ylim = get_margin_lims(sol_interpolated, plotattributes)
+        xlims --> xlim
+        ylims --> ylim
+        
+        # Formatting
+        arrow --> true
+        dpi --> 150
+        size --> (400, 500)
+        legend --> false
+        xaxis --> (rotation=45)
+        aspect_ratio --> 1
+        ticks --> false
+
         vars = get(plotattributes, :vars, (1,2))
-        ([[u[v].value for u in u_vals] for v in vars]...,)
+        ([[recursive_value(u[v]) for u in sol_interpolated.u] for v in vars]...,)
     end
 end
 
-@recipe function f(model::Abstract_DynamicalModel, frame::Abstract_ReferenceFrame)
+@recipe function f(model::Abstract_AstrodynamicalModel, frame::Abstract_ReferenceFrame)
     nothing
 end
 
-@recipe function f(model::Abstract_DynamicalModel, frame::SynodicFrame)
+@recipe function f(model::Abstract_AstrodynamicalModel, frame::SynodicFrame)
     # User arguments
     nolabels = get(plotattributes, :nolabels, get(plotattributes, :nomodel, false))
     plot_libration = get(plotattributes, :libration_points, true)
@@ -180,14 +216,16 @@ end
                         b = circ_props.R2[vars[2]] / circ_props.L)
     end
 
-    @series begin
-        seriestype := :hline
-        seriescolor := :black
-        linestyle := :dash
-        linewidth := 0.75
-        line_z := nothing
-        label := ""
-        [0]
+    if get(plotattributes, :origin_primary, true)
+        @series begin
+            seriestype := :hline
+            seriescolor := :black
+            linestyle := :dash
+            linewidth := 0.75
+            line_z := nothing
+            label := ""
+            [0]
+        end
     end
 
     if get(plotattributes, :origin_secondary, true)
@@ -247,7 +285,7 @@ function get_margin_lims(sol::Trajectory, plotattributes)
     a, b = get(plotattributes, :vars, (1, 2))
 
     # Work out the maximum extent of the orbit
-    x, y = (ForwardDiff.value.(sol.sol[a,:]), ForwardDiff.value.(sol.sol[b,:]))
+    x, y = (recursive_value.(sol.sol[a,:]), recursive_value.(sol.sol[b,:]))
     xlim = (minimum(x), maximum(x))
     ylim = (minimum(y), maximum(y))
 

@@ -79,7 +79,7 @@ function corrector_callback(::Abstract_AxisymmetricCorrector, system::EphemerisN
         end
 end
 
-function corrector_callback(::Abstract_AxisymmetricCorrector, ::Abstract_DynamicalModel; interp_points=10)
+function corrector_callback(::Abstract_AxisymmetricCorrector, ::Abstract_AstrodynamicalModel; interp_points=10)
     # TODO: Play with interp_points, interp_points=0 halves runtime/memory, but might cause issues due to oscillation around y-axis
     # TODO: idxs=[2] makes things very slow, even though it seems it should speed it up.
     return ContinuousCallback(orbit_xcrossing, terminate_after_N_crossings!; interp_points, save_positions=(false, false))
@@ -89,7 +89,7 @@ function corrector_solve(corrector::Abstract_AxisymmetricCorrector, state::State
     callback = strict ? corrector_callback(corrector, state.model; interp_points) : nothing
     userdata = Dict{Symbol,Any}(:crossings => crossings)  # XXX: Dict type specified for easy merging
 
-    sol = sensitivity_trace(AD, state, corrector.frame, corrector.alg; trace_time=true, abstol=1e-12, reltol=1e-12, callback, userdata, kwargs...)
+    sol = solve_sensitivity(AD, state, corrector.frame, corrector.alg; trace_time=isnothing(callback), abstol=1e-12, reltol=1e-12, callback, userdata, kwargs...)
     sol_tspan = ForwardDiff.value.((sol.t[begin], sol.t[end]))
 
     # Error-checking
@@ -139,7 +139,7 @@ function (corrector::Abstract_AxisymmetricCorrector)(state::State, F, J, x; kwar
         # As per [Russell.2006, Eq.(10) to (13)], we need to add the time variation term, 
         # which requires the values of [ẏ, ż, ẍ]. Here, these are provided in the STM
         # on the "end" column (since we're calling corrector_solve with trace_time=true).
-        STM = extract_STMs([sol.u[end]])[1]
-        J .= STM[[corrector.u1_free...], [corrector.u0_free..., end]]
+        STM = StateTransitionMatrix(sol[end], (sol.t[begin], sol.t[end]))
+        J .= STM[corrector.u1_free, [corrector.u0_free..., end]]
     end
 end

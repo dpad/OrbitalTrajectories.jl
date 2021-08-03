@@ -6,24 +6,25 @@ export collision, check_distance, crashed
 # ORBITAL PROBLEMS #
 #------------------#
 
-struct State{M<:Abstract_DynamicalModel,F<:Abstract_ReferenceFrame,O<:DiffEqBase.DEProblem} <: DiffEqBase.DEProblem
+struct State{M<:Abstract_AstrodynamicalModel,F<:Abstract_ReferenceFrame,uType,tType,isinplace,O<:SciMLBase.AbstractODEProblem{uType,tType,isinplace}} <: SciMLBase.AbstractODEProblem{uType,tType,isinplace}
     model :: M
     frame :: F  # Reference frame that the problem's u0 is defined in
     prob :: O
 end
-State(model::Abstract_DynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::AbstractArray, tspan) =
-    State(model, reference_frame, MArray{Tuple{size(u0)...}}(u0), tspan)
-State(model::Abstract_DynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::StaticArray, tspan) =
+# State(model::Abstract_AstrodynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::AbstractArray, tspan) =
+#     State(model, reference_frame, MArray{Tuple{size(u0)...}}(u0), tspan)
+State(model::Abstract_AstrodynamicalModel, reference_frame::Abstract_ReferenceFrame, u0::AbstractArray, tspan) =
     State(model, reference_frame, ODEProblem(model, u0, tspan, parameters(model)))
-State(model, u0, tspan) = State(model, default_reference_frame(model), u0, tspan)
+State(model::Abstract_AstrodynamicalModel, u0::AbstractArray, tspan) =
+    State(model, default_reference_frame(model), u0, tspan)
 
-struct Trajectory{M<:Abstract_DynamicalModel,F<:Abstract_ReferenceFrame,T,N,A,O<:DiffEqBase.AbstractTimeseriesSolution{T,N,A},} <: DiffEqBase.AbstractTimeseriesSolution{T,N,A}
+struct Trajectory{M<:Abstract_AstrodynamicalModel,F<:Abstract_ReferenceFrame,T,N,A,O<:DiffEqBase.AbstractTimeseriesSolution{T,N,A},} <: DiffEqBase.AbstractTimeseriesSolution{T,N,A}
     model :: M
     frame :: F  # Reference frame that the solution is defined in
     sol :: O
 end
 
-State(traj::Trajectory) = State(traj.model, traj.frame, traj.sol.prob)
+State(traj::Trajectory) = State(traj.model, traj.frame, traj.u[begin], (traj.t[begin], traj.t[end]))
 
 primary_body(state::State) = primary_body(state.model)
 primary_body(traj::Trajectory) = primary_body(traj.model)
@@ -69,26 +70,39 @@ end
 # DISPLAY #
 #---------#
 
-Base.show(io::IO, A::State) = println(io, summary(A))
-Base.summary(state::State) = string(
-    SciMLBase.TYPE_COLOR, nameof(typeof(state)), SciMLBase.NO_COLOR, " in ",
-    SciMLBase.TYPE_COLOR, state.model, SciMLBase.NO_COLOR, " in ",
-    SciMLBase.TYPE_COLOR, state.frame, "\n",
-    "    ", SciMLBase.NO_COLOR, "Underlying ", summary(state.prob), "\n",
-    "    ", SciMLBase.NO_COLOR, "tspan = ", state.prob.tspan, "\n",
-    "    u0    = ", state.prob.u0)
-Base.show(io::IO, m::MIME"text/plain", A::Trajectory) = show(io, A) # XXX: Required because also defined in DiffEqBase
-function Base.show(io::IO, A::Trajectory)
-    println(io, string(
-        SciMLBase.TYPE_COLOR, nameof(typeof(A)), SciMLBase.NO_COLOR, " in ",
-        SciMLBase.TYPE_COLOR, A.model, SciMLBase.NO_COLOR, " in ",
-        SciMLBase.TYPE_COLOR, A.frame, SciMLBase.NO_COLOR))
-    println(io, string(
-        "    retcode  = $(A.retcode) [$(length(A.t)) timesteps]\n",
-        "    t        = ($(A.t[begin]), $(A.t[end]))\n",
-        "    u[begin] = $(A.u[begin])\n",
-        "    u[end]   = $(A.u[end])\n"
-    ))
+Base.show(io::IO, ::MIME"text/plain", ::Type{S}) where {M,R,S<:State{M,R}} = print(io, "State{$(nameof(M)),$(nameof(R))}")
+function Base.show(io::IO, M::MIME"text/plain", state::State)
+    if get(io, :compact, false)
+        print(io, "State{$(nameof(typeof(state.model)))}(t=$(state.prob.tspan), u0=$(state.prob.u0))")
+    else
+        print(io, string(
+            SciMLBase.TYPE_COLOR, nameof(typeof(state)), SciMLBase.NO_COLOR, " in "))
+        show(io, M, state.model)
+        print(io, string(SciMLBase.NO_COLOR, " in ", SciMLBase.TYPE_COLOR))
+        show(io, M, state.frame)
+        println("\n", string(
+        "    ", SciMLBase.NO_COLOR, "Underlying ", summary(state.prob), "\n",
+        "    ", SciMLBase.NO_COLOR, "tspan = ", state.prob.tspan, "\n",
+        "    u0    = ", state.prob.u0)
+        )
+    end
+end
+Base.show(io::IO, ::MIME"text/plain", ::Type{T}) where {M,R,T<:Trajectory{M,R}} = print(io, "Trajectory{$(nameof(M)),$(nameof(R))}")
+function Base.show(io::IO, M::MIME"text/plain", A::Trajectory)
+    if get(io, :compact, false)
+        print(io, "Trajectory{$(nameof(typeof(A.model)))}(t=$((A.t[begin], A.t[end])))")
+    else
+        print(io, string(
+            SciMLBase.TYPE_COLOR, nameof(typeof(A)), SciMLBase.NO_COLOR, " in "))
+        show(io, M, A.model)
+        println(io, string(" in ", SciMLBase.TYPE_COLOR, A.frame, SciMLBase.NO_COLOR))
+        println(io, string(
+            "    retcode  = $(A.retcode) [$(length(A.t)) timesteps]\n",
+            "    t        = ($(A.t[begin]), $(A.t[end]))\n",
+            "    u[begin] = $(A.u[begin])\n",
+            "    u[end]   = $(A.u[end])\n"
+        ))
+    end
 end
 
 #-------#
@@ -104,7 +118,7 @@ DiffEqBase.solve(state::State, args...; reltol=1e-10, abstol=1e-10, kwargs...) =
 DiffEqBase.__solve(state::State; kwargs...) = DiffEqBase.__solve(state, DEFAULT_ALG; kwargs...)
 
 # The __solve() method does the actual heavy lifting, including converting to a Trajectory.
-function DiffEqBase.__solve(state::State, alg::DiffEqBase.DEAlgorithm; userdata=Dict(), callback=nothing, kwargs...)
+function DiffEqBase.__solve(state::State, alg::OrdinaryDiffEqAlgorithm; userdata=Dict(), callback=nothing, kwargs...)
     default_frame = default_reference_frame(state.model)
     real_state = convert_to_frame(state, default_frame)
 

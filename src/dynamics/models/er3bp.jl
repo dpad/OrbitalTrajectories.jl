@@ -4,13 +4,12 @@ export elliptical_potential, centrifugal_potential
 #---------------------------#
 # ER3BP EQUATIONS OF MOTION #
 #---------------------------#
-struct _ER3BP_ODEFunctions{S,F,F2} <: Abstract_ModelODEFunctions
+struct ER3BP_ODESystem{S,F} <: Abstract_AstrodynamicalODESystem
     ode_system :: S
     ode_f      :: F
-    ode_stm_f  :: F2
 end
 
-function ModelingToolkit.ODESystem(::Type{_ER3BP_ODEFunctions})
+function ModelingToolkit.ODESystem(::Type{ER3BP_ODESystem})
     @parameters  μ  # Mass fraction
     @parameters  e  # Eccentricity
     @parameters  f  # True anomaly
@@ -45,12 +44,12 @@ function elliptical_potential(μ, (x, y, z), f, e)
 end
 
 # Build the equations at pre-compile time
-const ER3BP_ODEFunctions = _ER3BP_ODEFunctions()
+const ER3BP_ODEFunctions = ER3BP_ODESystem()
 
 #-------------#
 # ER3BP MODEL #
 #-------------#
-struct ER3BP{O<:_ER3BP_ODEFunctions,P<:R3BPSystemProperties} <: Abstract_R3BPModel
+struct ER3BP{O<:ER3BP_ODESystem,P<:R3BPSystemProperties} <: Abstract_R3BPModel
     ode   :: O
     props :: P
 end

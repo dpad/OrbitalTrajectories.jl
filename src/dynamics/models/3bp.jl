@@ -7,12 +7,10 @@ export R3BPSystemProperties
 
 default_reference_frame(::Abstract_R3BPModel) = SynodicFrame()
 
-Base.show(io::IO, x::Abstract_R3BPModel) = print(io, "$(nameof(typeof(x)))$(x.props)")
-
 #-------------------#
 # SYSTEM PROPERTIES # 
 #-------------------#
-struct R3BPSystemProperties{L <: Unitful.Length, V <: Unitful.Velocity, T <: Unitful.Time}
+struct R3BPSystemProperties{L <: Unitful.Length, V <: Unitful.Velocity, T <: Unitful.Time} <: Abstract_ModelProperties
     b1 :: Symbol        # Identifier of body 1
     b2 :: Symbol        # Identifier of body 1
     μ  :: Float64       # Mass ratio
@@ -35,15 +33,16 @@ end
     data = merge(data, kwargs)
 
     # Run-time compute remaining values
-    μ = get(data, :μ, SpiceUtils.mass_fraction(a, b))
+    e = Float64(data[:e])
+    μ = Float64(get(data, :μ, SpiceUtils.mass_fraction(a, b)))
     R1 = get(data, :R1, SVector{3}(bodvrd(String(a), "RADII")u"km"))
     R2 = get(data, :R2, SVector{3}(bodvrd(String(b), "RADII")u"km"))
     # Ensure the Length attribute matches the Radius type
     L = convert(eltype(R1), data[:L])
 
-    R3BPSystemProperties(a, b, μ, L, data[:V], data[:T], data[:e], R1, R2)
+    R3BPSystemProperties(a, b, μ, L, data[:V], data[:T], e, R1, R2)
 end
-R3BPSystemProperties(system::Abstract_DynamicalModel) = R3BPSystemProperties(primary_body(system), secondary_body(system))
+R3BPSystemProperties(system::Abstract_AstrodynamicalModel) = R3BPSystemProperties(primary_body(system), secondary_body(system))
 
 # TODO: Compute these constants at run-time?
 const _3BPSystemPropertyData = Dict(
@@ -82,7 +81,7 @@ const _3BPSystemPropertyData = Dict(
     )
 )
 
-Base.show(io::IO, x::R3BPSystemProperties) = print(io, (x.b1, x.b2))
+Base.show(io::IO, ::MIME"text/plain", x::R3BPSystemProperties) = print(io, (x.b1, x.b2))
 ModelingToolkit.parameters(model::Abstract_R3BPModel) = [getfield(model.props, i.name) for i in ModelingToolkit.parameters(model.ode.ode_system)]
 
 #---------#
@@ -162,7 +161,7 @@ end
 
 function convert_to_frame(state::State{<:Abstract_R3BPModel,<:SynodicFrame}, frame::InertialFrame)
     to_inertial = state_to_inertial(state.tspan[1])
-    converted_u0 = to_inertial * state.u0
+    converted_u0 = to_inertial * state.u0[1:length(states(state.model))]
     new_state = State(state.model, frame, converted_u0, state.tspan)
     return new_state
 end

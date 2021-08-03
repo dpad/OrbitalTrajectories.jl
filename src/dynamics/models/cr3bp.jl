@@ -4,60 +4,91 @@ export jacobi
 #---------------------------#
 # CR3BP EQUATIONS OF MOTION #
 #---------------------------#
-struct _CR3BP_ODEFunctions{S,F,F2} <: Abstract_ModelODEFunctions
+struct CR3BP_ODESystem{S,F} <: Abstract_AstrodynamicalODESystem
     ode_system :: S
     ode_f      :: F
-    ode_stm_f  :: F2
 end
 
-function ModelingToolkit.ODESystem(::Type{_CR3BP_ODEFunctions})
+function ModelingToolkit.ODESystem(::Type{CR3BP_ODESystem})
     # Build from the ER3BP equations (with eccentricity = 0 for circular)
-    eqs_er3bp = ODESystem(_ER3BP_ODEFunctions)
+    eqs_er3bp = ODESystem(ER3BP_ODESystem)
     (μ, e) = parameters(eqs_er3bp)
     eqs = [eq.lhs ~ simplify(substitute(eq.rhs, e => 0)) for eq in equations(eqs_er3bp)]
     return ODESystem(eqs, independent_variable(eqs_er3bp), states(eqs_er3bp), [μ])
 end
 
 # Build the equations at pre-compile time
-const CR3BP_ODEFunctions = _CR3BP_ODEFunctions()
+const CR3BP_ODEFunctions = CR3BP_ODESystem()
 
 #-------------#
 # CR3BP MODEL #
 #-------------#
-struct CR3BP{handcoded,O<:_CR3BP_ODEFunctions,P<:R3BPSystemProperties} <: Abstract_R3BPModel
+
+struct CR3BP{O<:Abstract_AstrodynamicalODESystem,P<:R3BPSystemProperties} <: Abstract_R3BPModel
     ode   :: O
     props :: P
 end
 
+CR3BP(args...; kwargs...) = CR3BP(R3BPSystemProperties(args...; kwargs...))
+
 # TODO: Move hand-coded functions into :analytical of CR3BP
-CR3BP(args...; kwargs...) = CR3BP{Val{false}}(R3BPSystemProperties(args...; kwargs...))
-function CR3BP{nothandcoded}(props::R3BPSystemProperties; kwargs...) where {nothandcoded<:Val{false}} 
+function CR3BP(props::R3BPSystemProperties; kwargs...)
     if length(kwargs) == 0
         ode = CR3BP_ODEFunctions
     else
-        ode = _CR3BP_ODEFunctions(; kwargs...)
+        ode = CR3BP_ODESystem(; kwargs...)
     end
-    CR3BP{false, typeof(ode), typeof(props)}(ode, props)
+    CR3BP{typeof(ode), typeof(props)}(ode, props)
 end
 
 # XXX: The parameters overload below gives us a performance boost.
-ModelingToolkit.parameters(model::CR3BP{false}) = SVector(model.props.μ)
-
-# Hand-coded CR3BP
-HandcodedCR3BP(args...; kwargs...) = CR3BP{Val{true}}(R3BPSystemProperties(args...; kwargs...))
-function CR3BP{handcoded}(props::R3BPSystemProperties) where {handcoded<:Val{true}} 
-    ode = _CR3BP_ODEFunctions(nothing, handcodedCR3BP, handcodedCR3BP_withSTM)
-    CR3BP{true, typeof(ode), typeof(props)}(ode, props)
-end
-ModelingToolkit.parameters(model::CR3BP{true}) = SVector(model.props.μ)
+ModelingToolkit.parameters(model::CR3BP) = SVector(model.props.μ)
 
 #---------#
 # METHODS #
 #---------#
+
 @doc "Jacobi integral = 2U - V^2 = -2E [Oshima 2019, Eq. 3; Koon, Eq. 2.3.13; Wakker, Eq. 3.54]"
 jacobi(μ, vel, pos) = 2*centrifugal_potential(μ, pos) - norm(vel)^2
 
-function handcodedCR3BP(du, u, p, t)
+
+#---------------------------#
+# HANDCODED CR3BP FUNCTIONS #
+#---------------------------#
+
+# Hand-coded CR3BP
+struct HandcodedCR3BP_ODESystem{F} <: Abstract_AstrodynamicalODESystem
+    ode_f      :: F
+end
+
+struct HandcodedCR3BP_VarEqODESystem{Order,F} <: Abstract_VariationalEquationsODESystem{Order}
+    ode_f      :: F
+end
+
+const CR3BP_with_Handcoded = CR3BP{<:Union{HandcodedCR3BP_ODESystem,HandcodedCR3BP_VarEqODESystem}}
+
+function Base.show(io::IO, M::MIME"text/plain", x::CR3BP_with_Handcoded)
+    print(io, string(SciMLBase.TYPE_COLOR, nameof(typeof(x)), SciMLBase.NO_COLOR))
+    show(io, M, x.props)
+    print(io, " with hand-coded equations")
+end
+
+HandcodedCR3BP(args...; kwargs...) = HandcodedCR3BP(R3BPSystemProperties(args...; kwargs...))
+function HandcodedCR3BP(props::R3BPSystemProperties; kwargs...)
+    ode = HandcodedCR3BP_ODESystem(handcodedCR3BP_f)
+    CR3BP{typeof(ode), typeof(props)}(ode, props)
+end
+
+ModelingToolkit.parameters(model::CR3BP_with_Handcoded) = SVector(model.props.μ)
+state_length(::CR3BP_with_Handcoded) = 6
+
+function with_var_eqs(model::CR3BP{<:HandcodedCR3BP_ODESystem}, order=1)
+    order == 1 || error("HandcodedCR3BP only supports 1st-order variational equations!")
+    ode = HandcodedCR3BP_VarEqODESystem{1, typeof(handcodedCR3BP_withSTM_f)}(handcodedCR3BP_withSTM_f)
+    VarEqModel{order, typeof(ode), typeof(model)}(ode, model)
+end
+
+function handcodedCR3BP_f(du, u, p, t)
     @inbounds begin
         μ = p[1]
         x, y, z, x̂, ŷ, ẑ = u
@@ -71,7 +102,7 @@ function handcodedCR3BP(du, u, p, t)
     end
 end
 
-function handcodedCR3BP_withSTM(du, u, p, t)
+function handcodedCR3BP_withSTM_f(du, u, p, t)
     @inbounds begin
         μ = p[1]
         x, y, z, x̂, ŷ, ẑ = u

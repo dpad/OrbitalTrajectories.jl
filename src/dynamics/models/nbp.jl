@@ -4,7 +4,7 @@ export get_state
 #----------------#
 # N-BODY SYSTEMS #
 #----------------#
-struct NBPSystemProperties{N}
+struct NBPSystemProperties{N} <: Abstract_ModelProperties
     center :: Symbol
     center_id :: Integer
     bodies :: SVector{N, Symbol}
@@ -23,19 +23,18 @@ function NBPSystemProperties(center::Symbol, bodies::Vararg{Symbol})
     NBPSystemProperties(center, center_id, bodies, body_ids, μ)
 end
 
-Base.show(io::IO, x::NBPSystemProperties) = print(io, "($(x.center), acc=$(x.bodies))")
+Base.show(io::IO, ::MIME"text/plain", x::NBPSystemProperties) = print(io, "($(x.center), acc=$(x.bodies))")
 
 #-----------------------------------#
 # EPHEMERIS-NBP EQUATIONS OF MOTION #
 #-----------------------------------#
-struct _NBP_ODEFunctions{S,F,F2} <: Abstract_ModelODEFunctions
+struct NBP_ODESystem{S,F} <: Abstract_AstrodynamicalODESystem
     ode_system :: S
     ode_f      :: F
-    ode_stm_f  :: F2
 end
 
 # XXX: Need the "T" in place for @memoize to work
-@memoize function ModelingToolkit.ODESystem(T::Type{_NBP_ODEFunctions}, props::NBPSystemProperties)
+@memoize function ModelingToolkit.ODESystem(T::Type{NBP_ODESystem}, props::NBPSystemProperties)
     @parameters t  # Time in J2000 epoch
     @variables x(t) y(t) z(t)
     D2 = Differential(t)^2
@@ -76,7 +75,7 @@ end
 #---------------------#
 # EPHEMERIS-NBP MODEL #
 #---------------------#
-struct EphemerisNBP{O<:_NBP_ODEFunctions,P<:NBPSystemProperties} <: Abstract_DynamicalModel
+struct EphemerisNBP{O<:NBP_ODESystem,P<:NBPSystemProperties} <: Abstract_AstrodynamicalModel
     ode   :: O
     props :: P
 end
@@ -85,10 +84,9 @@ function EphemerisNBP(bodies::Vararg{Symbol}; center=nothing, kwargs...)
     all_bodies = isnothing(center) ? (bodies[1], bodies...) : (center, bodies...)
     bodies_symbols = @. Symbol(lowercase(String(all_bodies)))
     props = NBPSystemProperties(bodies_symbols...)
-    EphemerisNBP(_NBP_ODEFunctions(props; kwargs...), props)
+    EphemerisNBP(NBP_ODESystem(props; kwargs...), props)
 end
 
-Base.show(io::IO, x::EphemerisNBP) = print(io, "$(nameof(typeof(x)))$(x.props)")
 ModelingToolkit.parameters(model::EphemerisNBP) = SVector{0,Float64}()
 
 # HELPERS
@@ -120,6 +118,17 @@ function convert_to_frame(state::State{<:EphemerisNBP,<:Abstract_ReferenceFrame}
     prob1 = remake(state.prob; u0=converted_u0)
     state = State(state.model, frame, prob1)
     return state
+end
+function convert_to_frame(state::State{<:VarEqModel{Order,<:Any,<:EphemerisNBP},<:Abstract_ReferenceFrame}, frame::Abstract_ReferenceFrame) where {Order}
+    if Order != 1
+        error("convert_to_frame() for a VarEqModel{EphemerisNBP} currently only supports up to Order 1!")
+    end
+    # Create a temporary state with the Ephemeris model
+    ephemeris_state = State(state.model.model, state.frame, state.u0, state.tspan)
+    # Convert the ephemeris state to the desired frame
+    converted_state = convert_to_frame(ephemeris_state, frame)
+    # Convert back to the VarEqs model state
+    State(state.model, converted_state.frame, converted_state.u0, converted_state.tspan)
 end
 
 function state_to_frame(state::State{<:EphemerisNBP,InertialFrame}, frame::SynodicFrame{true}, to_synodic, inv_synodic)
