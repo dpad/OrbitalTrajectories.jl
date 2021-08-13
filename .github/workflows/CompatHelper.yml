@@ -14,6 +14,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMPATHELPER_PRIV: ${{ secrets.ORBITALTRAJECTORIES_DEPLOY_SSH_KEY }}
         run: julia -e '
-          using Pkg;
           using CompatHelper;
-          CompatHelper.main(keep_existing_compat=true, drop_existing_compat=true);'
+          CompatHelper.main(; entry_type=DropEntry())'
