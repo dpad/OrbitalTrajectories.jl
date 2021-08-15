@@ -81,5 +81,5 @@ state_length(s::State) = state_length(s.model)
 # INCLUDES #
 #----------#
 include("models/3bp.jl")
-# include("models/4bp.jl")
-# include("models/nbp.jl")
+include("models/4bp.jl")
+include("models/nbp.jl")

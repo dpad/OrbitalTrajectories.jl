@@ -69,7 +69,7 @@ end
     eqs = @. D2(pos) ~ sum(accelerations)
 
     # Build the 2nd-order ODE props
-    return ODESystem(eqs, t, pos, [])
+    return ODESystem(expand_derivatives.(eqs), t, pos, []; name=:EphemerisNBP)
 end
 
 #---------------------#
