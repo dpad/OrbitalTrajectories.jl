@@ -9,7 +9,7 @@ struct ER3BP_ODESystem{S,F} <: Abstract_AstrodynamicalODESystem
     ode_f      :: F
 end
 
-function ModelingToolkit.ODESystem(::Type{ER3BP_ODESystem})
+function ModelingToolkit.ODESystem(::Type{T}) where {T<:ER3BP_ODESystem}
     @parameters  μ  # Mass fraction
     @parameters  e  # Eccentricity
     @parameters  f  # True anomaly
@@ -27,7 +27,8 @@ function ModelingToolkit.ODESystem(::Type{ER3BP_ODESystem})
         ], 
         f,
         [x, y, z],
-        [μ, e]
+        [μ, e];
+        name=nameof(T)
     )
 end
 
