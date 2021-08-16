@@ -15,4 +15,4 @@ jobs:
           COMPATHELPER_PRIV: ${{ secrets.ORBITALTRAJECTORIES_DEPLOY_SSH_KEY }}
         run: julia -e '
           using CompatHelper;
-          CompatHelper.main(; entry_type=DropEntry())'
+          CompatHelper.main(; entry_type=CompatHelper.DropEntry())'
