@@ -9,7 +9,7 @@ struct ER3BP_ODESystem{S,F} <: Abstract_AstrodynamicalODESystem
     ode_f      :: F
 end
 
-function ModelingToolkit.ODESystem(::Type{ER3BP_ODESystem})
+function ModelingToolkit.ODESystem(::Type{T}) where {T<:ER3BP_ODESystem}
     @parameters  μ  # Mass fraction
     @parameters  e  # Eccentricity
     @parameters  f  # True anomaly
@@ -20,14 +20,15 @@ function ModelingToolkit.ODESystem(::Type{ER3BP_ODESystem})
     # [DeiTos2017, Eqs. 14]
     # NOTE: need to expand the RHS derivatives before calling order-lowering
     ω = elliptical_potential(μ, (x, y, z), f, e)
-    return ODESystem([
+    return ODESystem(expand_derivatives.([
             D2(x) ~ +2D(y) + Dx(ω),
             D2(y) ~ -2D(x) + Dy(ω),
             D2(z) ~        + Dz(ω)
-        ], 
+        ]),
         f,
         [x, y, z],
-        [μ, e]
+        [μ, e];
+        name=nameof(T)
     )
 end
 

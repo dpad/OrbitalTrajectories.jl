@@ -35,7 +35,8 @@ end
     eqs, dvs = ode_order_lowering(eqs, independent_variable(_ode), ModelingToolkit.states(_ode)) 
     eqs = [eqs[end - num_orig_eqs + 1:end]..., eqs[1:num_orig_eqs]...]
     dvs = [dvs[end - num_orig_eqs + 1:end]..., dvs[1:num_orig_eqs]...]
-    ODESystem(simplify.(eqs), independent_variable(_ode), dvs, parameters(_ode))
+
+    ODESystem(simplify.(eqs), independent_variable(_ode), dvs, parameters(_ode); name=nameof(_ode))
 end
 
 

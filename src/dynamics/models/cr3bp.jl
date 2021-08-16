@@ -14,7 +14,7 @@ function ModelingToolkit.ODESystem(::Type{CR3BP_ODESystem})
     eqs_er3bp = ODESystem(ER3BP_ODESystem)
     (μ, e) = parameters(eqs_er3bp)
     eqs = [eq.lhs ~ simplify(substitute(eq.rhs, e => 0)) for eq in equations(eqs_er3bp)]
-    return ODESystem(eqs, independent_variable(eqs_er3bp), states(eqs_er3bp), [μ])
+    return ODESystem(eqs, independent_variable(eqs_er3bp), states(eqs_er3bp), [μ]; name=:CR3BP)
 end
 
 # Build the equations at pre-compile time
